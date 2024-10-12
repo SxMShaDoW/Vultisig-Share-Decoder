@@ -343,6 +343,13 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 
 
 const footerHTML = `
+    <style>
+        ul {
+            list-style-type: none; /* Remove bullets */
+            padding: 0;           /* Remove default padding */
+            margin: 0;            /* Remove default margin */
+        }
+    </style>
 <div class="donate-section">
     <h2>Support This Project</h2>
     <p>If you find this tool helpful, please consider making a donation as it will be passed on to tools supporting this project.</p>
