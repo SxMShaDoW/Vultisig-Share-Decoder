@@ -5,11 +5,11 @@ This is a simple "recovery" tool to see the public information on your vault sha
 This is useful when you want to remember what share it is (if you changed the name).
 You can run this locally.
 
-## Running Locally
-go run main.go recover --files "<a vault share.dat|.bak|.vult>"
+## Running the CLI locally
+`go run main.go recover --files "<a vault share.dat|.bak|.vult>"`
 
-## Running the server locally
-go run *.go server
+## Running the server locally (which calls the CLI)
+`go run *.go server`
 
 ## Viewing a Demo
 [Demo](https://vultisig-share-decoder.replit.app/?)
