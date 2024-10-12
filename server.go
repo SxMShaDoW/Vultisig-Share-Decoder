@@ -357,11 +357,6 @@ const footerHTML = `
         <div class="address-item">
             <span class="currency">BTC:</span>
             <span class="address">bc1qed9kurz5045myzsm25gdq52tcntpaj8x8zlat2</span>
-        </div>
-        <div class="address-item">
-            <span class="currency">Kuji:</span>
-            <span class="address">kujira17xtxsrkanfugk6sng5h7npkw5mg8wg68ugvp3h</span>
-        </div>
         <div class="address-item">
             <span class="currency">ETH:</span>
             <span class="address">0x5D4892B1b76157ed0b209c065F9753a55795b257</span>
