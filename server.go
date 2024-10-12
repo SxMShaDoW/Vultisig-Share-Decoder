@@ -119,7 +119,8 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
     </head>
     <body>
       <h2>Decode a Vultisig Share</h2>
-      <p>Why is this tool useful? It can provide you information about your backup without having to import it into the app. It can, in the future, also extract your private key information in case you need to migrate to a traditional seed based app.</p>
+      <p>Why is this tool useful? </p>
+        <p>It can provide you information about your backup without having to import it into the app. It can, in the future, also extract your private key information in case you need to migrate to a traditional seed based app.</p>
       <form enctype="multipart/form-data" action="/upload" method="post">
         <div class="form-group">
           <label for="file">Select a file:</label>
@@ -139,7 +140,7 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
         </div>
       </form>
       <p> In the future, we can also extract the private keys (it is commented out in the code for now) </p>
-      <p> The file you uploaded is deleted right away and we never store the password anywhere. You can check the github and the replit </p>
+      <p> The file you uploaded is deleted right away and we never store the password anywhere. You can check the <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/tree/main">Github</a> and on <a href="http://replit.com/@kersch/VultisigShareDecoder">Replit</a> </p>
         ` + footerHTML + `
     </body>
     </html>
