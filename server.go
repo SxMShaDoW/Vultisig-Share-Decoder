@@ -140,6 +140,7 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
       </form>
       <p> In the future, we can also extract the private keys (it is commented out in the code for now) </p>
       <p> The file you uploaded is deleted right away and we never store the password anywhere. You can check the github and the replit </p>
+        ` + footerHTML + `
     </body>
     </html>
     `
@@ -183,6 +184,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
             <form action="/" method="get">
                 <input type="submit" value="Check another share" />
             </form>
+            ` + footerHTML + `
         </body>
         </html>
         `)
@@ -281,6 +283,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
             <form action="/" method="get">
                 <input type="submit" value="Check another share" />
             </form>
+            ` + footerHTML + `
         </body>
         </html>
         `, msg)
@@ -326,6 +329,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
         <form action="/" method="get">
             <input type="submit" value="Check another share" />
         </form>
+        ` + footerHTML + `
     </body>
     </html>
     `, output)
@@ -338,3 +342,61 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 
+const footerHTML = `
+<div class="donate-section">
+    <h2>Support This Project</h2>
+    <p>If you find this tool helpful, please consider making a donation as it will be passed on to tools supporting this project.</p>
+    <div class="donation-addresses">
+        <div class="address-item">
+            <span class="currency">BTC:</span>
+            <span class="address">bc1qed9kurz5045myzsm25gdq52tcntpaj8x8zlat2</span>
+        </div>
+        <div class="address-item">
+            <span class="currency">Kuji:</span>
+            <span class="address">kujira17xtxsrkanfugk6sng5h7npkw5mg8wg68ugvp3h</span>
+        </div>
+        <div class="address-item">
+            <span class="currency">ETH:</span>
+            <span class="address">0x5D4892B1b76157ed0b209c065F9753a55795b257</span>
+        </div>
+    </div>
+</div>
+
+<div class="disclaimer-section">
+    <h3>Disclaimer</h3>
+    <p>Use this tool and its data at your own risk. While we strive for accuracy, it is essential that you independently verify all transaction information. The user bears sole responsibility for confirming the accuracy of any data obtained through this service.</p>
+    <p>All information provided on this site is on an "as is" basis, without any guarantees of completeness, accuracy, timeliness or of the results obtained from the use of this information. We make no representations or warranties of any kind, express or implied, about the completeness, accuracy, reliability, suitability or availability with respect to the website or the information contained on the site for any purpose.</p>
+    <p>This website is for informational purposes only and does not constitute financial, tax, or legal advice. For professional guidance, please consult with qualified financial, tax, or legal advisors. We cannot guarantee the absence of errors or full tax compliance. Consequently, we will not be liable for any losses or damages, including but not limited to indirect or consequential loss or damage, or any loss or damage whatsoever arising from loss of data or profits arising out of, or in connection with, the use of this tool.</p>
+    <p>By using this tool, you acknowledge and agree to these terms. If you do not agree with this disclaimer, please refrain from using the service.</p>
+</div>
+
+<div class="legal-section">
+    <h2>Terms of Service and Privacy Policy</h2>
+
+    <h3>1. Terms of Service</h3>
+    <p>By using this service, you agree to the following terms:</p>
+    <ul>
+        <li>You will use this service responsibly and not attempt to overload or damage the system.</li>
+        <li>You understand that the data provided is for informational purposes only and should not be considered as financial, tax, or legal advice.</li>
+        <li>You agree not to use this service for any illegal activities or in violation of any applicable laws.</li>
+        <li>We reserve the right to terminate or suspend access to our service for any reason, without prior notice.</li>
+    </ul>
+
+    <h3>2. Privacy Policy</h3>
+    <p>We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you about how we handle your data:</p>
+    <ul>
+        <li>We collect a vault share and then delete it after processing it. We do not collect logs.</li>
+        <li>We do not sell, trade, or otherwise transfer your personally identifiable information to third parties.</li>
+        <li>Upon request, we can delete your stored information. To request deletion, please contact us at kuji.refute847@8alias.com.</li>
+    </ul>
+
+    <h3>3. Cookies</h3>
+    <p>We do not use Cookies.</p>
+
+    <h3>4. Changes to Our Policies</h3>
+    <p>We may update our Terms of Service and Privacy Policy from time to time. We will notify you of any changes by posting the new policies on this page.</p>
+
+    <h3>5. Contact Us</h3>
+    <p>If you have any questions about these policies, please contact us at kuji.refute847@8alias.com</p>
+</div>
+`
