@@ -388,9 +388,9 @@ const footerHTML = `
     <h3>2. Privacy Policy</h3>
     <p>We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you about how we handle your data:</p>
     <ul>
-        <li>We collect a vault share and then delete it after processing it. We do not collect logs.</li>
-        <li>We do not sell, trade, or otherwise transfer your personally identifiable information to third parties.</li>
-        <li>Upon request, we can delete your stored information. To request deletion, please contact us at kuji.refute847@8alias.com.</li>
+        <li>We collect a vultisig share and then delete it after processing it. We do not logs anything</li>
+        <li>We do not sell, trade, or otherwise transfer your personally identifiable information to third parties, because we do not track anything.</li>
+    <li>We do use Replit for deployment and hosting and their privacy policy may apply.</li>
     </ul>
 
     <h3>3. Cookies</h3>
