@@ -327,6 +327,7 @@ func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, out
 	vssShares := make(vss.Shares, len(allSecrets))
 	for i, s := range allSecrets {
 		if keyType == ECDSA {
+			fmt.Fprintf(outputBuilder, "\n Public Key(%s): %v\n", keyType, s.LocalState[ECDSA].PubKey)
 			share := vss.Share{
 				Threshold: threshold,
 				ID:        s.LocalState[ECDSA].ECDSALocalData.ShareID,
@@ -334,6 +335,7 @@ func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, out
 			}
 			vssShares[i] = &share
 		} else { // EdDSA
+			fmt.Fprintf(outputBuilder, "\n Public Key(%s): %v\n", keyType, s.LocalState[EdDSA].PubKey)
 			share := vss.Share{
 				Threshold: threshold,
 				ID:        s.LocalState[EdDSA].EDDSALocalData.ShareID,
@@ -353,6 +355,7 @@ func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, out
 	}
 	privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
 	publicKey := privateKey.PubKey()
+	
 	hexPubKey := hex.EncodeToString(publicKey.SerializeCompressed())
 	// unharden derive all the keys
 	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(%s): %s\n", keyType, hexPubKey)
