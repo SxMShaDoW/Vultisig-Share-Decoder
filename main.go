@@ -355,56 +355,65 @@ func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, out
 	publicKey := privateKey.PubKey()
 	hexPubKey := hex.EncodeToString(publicKey.SerializeCompressed())
 	// unharden derive all the keys
-	fmt.Fprintf(outputBuilder, "hex encoded root pubkey(%s): %s\n", keyType, hexPubKey)
-	//fmt.Printf("hex encoded root privkey(%s):%s\n", keyType, hex.EncodeToString(privateKey.Serialize()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(%s): %s\n", keyType, hexPubKey)
+	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(%s):%s\n", keyType, hex.EncodeToString(privateKey.Serialize()))
 	if keyType == ECDSA {
-		//net := &chaincfg.MainNetParams
+		net := &chaincfg.MainNetParams
 		chaincode := allSecrets[0].LocalState[ECDSA].ChainCodeHex
-		fmt.Fprintf(outputBuilder, "chaincode: %s\n", chaincode)
-		//chaincodeBuf, err := hex.DecodeString(chaincode)
+		fmt.Fprintf(outputBuilder, "\nchaincode: %s\n", chaincode)
+		chaincodeBuf, err := hex.DecodeString(chaincode)
 		if err != nil {
 			return err
 		}
-		//extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincodeBuf, []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
-		//fmt.Println("extended private key full:", extendedPrivateKey.String())
+		extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincodeBuf, []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
+		fmt.Fprintf(outputBuilder,"\nextended private key full: %s\n", extendedPrivateKey.String())
 
-		// supportedCoins := []struct {
-		// 	name       string
-		// 	derivePath string
-		// 	action     func(*hdkeychain.ExtendedKey) error
-		// }{
-		// 	{
-		// 		name:       "bitcoin",
-		// 		derivePath: "m/84'/0'/0'/0/0",
-		// 		action:     showBitcoinKey,
-		// 	},
-		// 	{
-		// 		name:       "ethereum",
-		// 		derivePath: "m/44'/60'/0'/0/0",
-		// 		action:     showEthereumKey,
-		// 	},
-		// 	{
-		// 		name:       "thorchain",
-		// 		derivePath: "m/44'/931'/0'/0/0",
-		// 		action:     showThorchainKey,
-		// 	},
-		// 	{
-		// 		name:       "mayachain",
-		// 		derivePath: "m/44'/931'/0'/0/0",
-		// 		action:     showMayachainKey,
-		// 	},
-		// }
-		// for _, coin := range supportedCoins {
-		// 	fmt.Println("Recovering", coin.name, "key....")
-		// 	key, err := getDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
-		// 	if err != nil {
-		// 		return fmt.Errorf("error deriving private key for %s: %w", coin.name, err)
-		// 	}
-		// 	fmt.Println("private key for ", coin.name, ":", key.String())
-		// 	if err := coin.action(key); err != nil {
-		// 		fmt.Println("error showing keys for ", coin.name, "error:", err)
-		// 	}
-		// }
+		supportedCoins := []struct {
+			name       string
+			derivePath string
+			action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
+		}{
+			{
+					name:       "bitcoin",
+					derivePath: "m/84'/0'/0'/0/0",
+					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+							return showBitcoinKey(key, output)
+					},
+			},
+			{
+					name:       "ethereum",
+					derivePath: "m/44'/60'/0'/0/0",
+					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+							return showEthereumKey(key, output)
+					},
+			},
+			{
+					name:       "thorchain",
+					derivePath: "m/44'/931'/0'/0/0",
+					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+							return showThorchainKey(key, output)
+					},
+			},
+			{
+					name:       "mayachain",
+					derivePath: "m/44'/931'/0'/0/0",
+					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+							return showMayachainKey(key, output)
+					},
+			},
+		}
+
+		for _, coin := range supportedCoins {
+			fmt.Fprintf(outputBuilder,"\nRecovering %s key....\n", coin.name)
+			key, err := getDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
+			if err != nil {
+				return fmt.Errorf("error deriving private key for %s: %w", coin.name, err)
+			}
+			fmt.Fprintf(outputBuilder,"\nprivate key for %s: %s \n",coin.name,key.String())
+			if err := coin.action(key, outputBuilder); err != nil {
+				fmt.Println("error showing keys for ", coin.name, "error:", err)
+			}
+		}
 	}
 	return nil
 }
@@ -423,7 +432,7 @@ func getDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.Extende
 	}
 	return key, nil
 }
-func showEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
+func showEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -433,15 +442,15 @@ func showEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
 		return err
 	}
 
-	fmt.Println("hex encoded non-hardened public key for ethereum:", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-	fmt.Println("hex encoded private key for ethereum:", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-	fmt.Println("ethereum address:", crypto.PubkeyToAddress(*nonHardenedPubKey.ToECDSA()).Hex())
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for ethereum:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded private key for ethereum:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
+	fmt.Fprintf(outputBuilder,"\nethereum address:%s\n", crypto.PubkeyToAddress(*nonHardenedPubKey.ToECDSA()).Hex())
 	return nil
 }
 
-func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
+func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	net := &chaincfg.MainNetParams
-	fmt.Println("non-hardened extended private key for bitcoin:", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for bitcoin:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -459,15 +468,15 @@ func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("hex encoded non-hardened public key for bitcoin:", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-	fmt.Println("address:", addressPubKey.EncodeAddress())
-	fmt.Println("WIF private key for bitcoin:", wif.String())
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for bitcoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder,"\nWIF private key for bitcoin:%s\n", wif.String())
 	return nil
 }
 
-func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
+func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 
-	fmt.Println("non-hardened extended private key for THORChain:", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for THORChain:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -477,8 +486,8 @@ func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
 		return err
 	}
 
-	fmt.Println("hex encoded non-hardened private key for THORChain:", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-	fmt.Println("hex encoded non-hardened public key for THORChain:", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened private key for THORChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for THORChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	config := sdk.GetConfig()
 	config.SetBech32PrefixForAccount("thor", "thorpub")
 	config.SetBech32PrefixForValidator("thorv", "thorvpub")
@@ -488,12 +497,12 @@ func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
 		Key: nonHardenedPubKey.SerializeCompressed(),
 	}
 	addr := types.AccAddress(compressedPubkey.Address().Bytes())
-	fmt.Println("address:", addr.String())
+	fmt.Fprintf(outputBuilder,"address:%s", addr.String())
 	return nil
 }
 
-func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
-	fmt.Println("non-hardened extended private key for MAYAChain:", extendedPrivateKey.String())
+func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
+	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for MAYAChain:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -503,8 +512,8 @@ func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
 		return err
 	}
 
-	fmt.Println("hex encoded non-hardened private key for MAYAChain:", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-	fmt.Println("hex encoded non-hardened public key for MAYAChain:", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened private key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	config := sdk.GetConfig()
 	config.SetBech32PrefixForAccount("maya", "mayapub")
 	config.SetBech32PrefixForValidator("mayav", "mayavpub")
@@ -514,7 +523,7 @@ func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey) error {
 		Key: nonHardenedPubKey.SerializeCompressed(),
 	}
 	addr := types.AccAddress(compressedPubkey.Address().Bytes())
-	fmt.Println("address:", addr.String())
+	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addr.String())
 	return nil
 }
 
