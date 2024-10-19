@@ -213,58 +213,69 @@ const (
 	Web
 )
 
-func ProcessFiles(files []string, password string, source InputSource) (string, error) {
-	var outputBuilder strings.Builder
+func ProcessFiles(files []string, passwords []string, source InputSource) (string, error) {
+		var outputBuilder strings.Builder
 
-	if len(files) == 0 {
-		return "", fmt.Errorf("no files provided")
-	}
-
-	allSecret := make([]tempLocalState, 0, len(files))
-	for _, f := range files {
-		if isBakFile(f) {
-			result, err := getLocalStateFromBak(f, password, source) // Pass password here
-			if err != nil {
-				return "", fmt.Errorf("error reading file %s: %w", f, err)
-			}
-			outputBuilder.WriteString(fmt.Sprintf("Backup name: %v\n", f))
-			outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
-			outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
-			allSecret = append(allSecret, tempLocalState{
-				FileName:   f,
-				LocalState: result,
-			})
-		} else if strings.HasSuffix(f, "dat") {
-			result, err := getLocalStateFromFile(f)
-			if err != nil {
-				return "", fmt.Errorf("error reading file %s: %w", f, err)
-			}
-			outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
-			outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
-			allSecret = append(allSecret, tempLocalState{
-				FileName:   f,
-				LocalState: result,
-			})
+		if len(files) == 0 {
+				return "", fmt.Errorf("no files provided")
 		}
-	}
 
-	threshold := len(files)
-	keyTypes := []TssKeyType{ECDSA, EdDSA}
-	for _, keyType := range keyTypes {
-		if err := getKeys(threshold, allSecret, keyType, &outputBuilder); err != nil {
-			return "", err
+		allSecret := make([]tempLocalState, 0, len(files))
+
+		for i, f := range files {
+				var password string
+				if i < len(passwords) {
+						password = passwords[i] // Use the corresponding password if available
+				} else {
+						password = "" // Default to an empty string if passwords are missing
+				}
+
+				if isBakFile(f) {
+						result, err := getLocalStateFromBak(f, password, source)
+						if err != nil {
+								return "", fmt.Errorf("error reading file %s: %w", f, err)
+						}
+						outputBuilder.WriteString(fmt.Sprintf("Backup name: %v\n", f))
+						outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
+						outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
+						allSecret = append(allSecret, tempLocalState{
+								FileName:   f,
+								LocalState: result,
+						})
+				} else if strings.HasSuffix(f, "dat") {
+						result, err := getLocalStateFromFile(f)
+						if err != nil {
+								return "", fmt.Errorf("error reading file %s: %w", f, err)
+						}
+						outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
+						outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
+						allSecret = append(allSecret, tempLocalState{
+								FileName:   f,
+								LocalState: result,
+						})
+				}
 		}
-	}
 
-	return outputBuilder.String(), nil
+		threshold := len(files)
+		keyTypes := []TssKeyType{ECDSA, EdDSA}
+		for _, keyType := range keyTypes {
+				if err := getKeys(threshold, allSecret, keyType, &outputBuilder); err != nil {
+						return "", err
+				}
+		}
+
+		return outputBuilder.String(), nil
 }
+
 
 func RecoverAction(cCtx *cli.Context) error {
 	files := cCtx.StringSlice("files")
-	password := cCtx.String("password")
+	//password := cCtx.StringSlice("password")
+	// Create a slice of empty strings for passwords
+	passwords := make([]string, len(files))
 	source := CommandLine
 
-	output, err := ProcessFiles(files, password, source)
+	output, err := ProcessFiles(files, passwords, source)
 	if err != nil {
 		return err
 	}
@@ -273,52 +284,6 @@ func RecoverAction(cCtx *cli.Context) error {
 	fmt.Println(output)
 	return nil
 }
-
-// func RecoverAction(cCtx *cli.Context) error {
-// 	files := cCtx.StringSlice("files")
-// 	password := cCtx.String("password") // Retrieve password from the CLI context, if provided
-
-// 	fmt.Printf("Files received: %v\n", files)
-// 	fmt.Printf("All flags: %v\n", cCtx.FlagNames())
-// 	if len(files) == 0 {
-// 		fmt.Println("No files provided")
-// 		return fmt.Errorf("no files provided")
-// 	}
-
-// 	allSecret := make([]tempLocalState, 0, len(files))
-// 	for _, f := range files {
-// 		var result map[TssKeyType]tss.LocalState
-// 		var err error
-
-// 		if isBakFile(f) {
-// 			result, err = getLocalStateFromBak(f, password) // Pass password to getLocalStateFromBak
-// 			fmt.Printf("This Share: %s\n", result[EdDSA].LocalPartyKey)
-// 			fmt.Printf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys)
-// 		} else if strings.HasSuffix(f, "dat") {
-// 			result, err = getLocalStateFromFile(f) // Password not needed for .dat files
-// 		} else {
-// 			return fmt.Errorf("unsupported file type for file %s", f)
-// 		}
-
-// 		if err != nil {
-// 			return fmt.Errorf("error reading file %s: %w", f, err)
-// 		}
-// 		allSecret = append(allSecret, tempLocalState{
-// 			FileName:   f,
-// 			LocalState: result,
-// 		})
-// 	}
-
-// 	threshold := len(files)
-// 	keyTypes := []TssKeyType{ECDSA, EdDSA}
-// 	for _, keyType := range keyTypes {
-// 		if err := getKeys(threshold, allSecret, keyType); err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	return nil
-// }
 
 func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, outputBuilder *strings.Builder) error {
 	if len(allSecrets) == 0 {
@@ -435,6 +400,7 @@ func getDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.Extende
 	}
 	return key, nil
 }
+
 func showEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
@@ -577,6 +543,7 @@ func decryptFileAction(ctx *cli.Context) error {
 	}
 	return nil
 }
+
 func decryptVault(vaultContainer *v1.VaultContainer, inputFileName string, password string, source InputSource) (*v1.Vault, error) {
 	vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
 	if err != nil {
