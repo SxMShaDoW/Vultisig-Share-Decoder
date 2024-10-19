@@ -450,7 +450,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
         <h2>Decoded Output:</h2>
             <p> What are some relevant things to look for: </p>
             <ul>
-                <li>Make sure the Public Key(ECDSA) and Private Key (EDDSA) are what you expect</li>
+                <li>Make sure the Public Key(ECDSA) and Public Key (EDDSA) are what you expect</li>
                 </br>
                 <li>The "hex encoded private key for ..." is the private key you can import into Unisat/MetaMask, etc</li>
                 </br>
