@@ -5,6 +5,17 @@ This is a simple "recovery" tool to see the public information on your vault sha
 This is useful when you want to remember what share it is (if you changed the name).
 You can (and should) run this locally.
 
+### Dependencies
+[Go](https://go.dev/doc/install)
+
+### Running the GO Binary
+1. `git clone` or just download `main` binary
+2. Once downloaded, make sure it is executable such as `chmod +x main`
+3. Once its executable you can do the same CLI commands below. 
+`./main recover --files ....`
+
+Note: You should not trust this binary and create your own with `go build main.go server.go` or `go build main.go` (note: if you do not build with the server.go you are going to need to comment out StartServer)
+
 ## Running the CLI locally
 `go run main.go recover --files "<a vault share.dat|.bak|.vult>"`
 `go run main.go recover --files "honeypot.bak"` 
@@ -20,7 +31,7 @@ This will return something like this:
 hex encoded private key for ethereum:2abbfad6ea48607d9665eXXXXXbed21204cfe479fdec40d33058c0a4e3feb
 ```
 
-That can be imported into MetaMask
+That can be imported into [MetaMask](https://metamask.io/)
 
 ## Running the server locally (which calls the CLI)
 `go run *.go server`

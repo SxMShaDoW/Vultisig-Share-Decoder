@@ -120,7 +120,7 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
     <body>
       <h2>Decode a Vultisig Share</h2>
       <p>Why is this tool useful? </p>
-        <p>It can provide you information about your backup without having to import it into the app. It will also extract your private key information in case you need to migrate to a traditional seed based app.</p>
+        <p>It can provide you information about your backup without having to import it into the app. It will also extract your private key information in case you need to migrate to a traditional seed based app. Note: It will only extract the correct private key information if you provide more than half of the threshold files (2of2,2of3,4of6, etc)</p>
       <form enctype="multipart/form-data" action="/upload" method="post">
         <div class="form-group">
           <label for="file">Select a file:</label>
