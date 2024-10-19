@@ -246,7 +246,15 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
             </div>
         </form>
 
-        <p> The file you uploaded is deleted right away and we never store the password anywhere. You can check the <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/tree/main">Github</a> and on <a href="http://replit.com/@kersch/VultisigShareDecoder">Replit</a> </p>
+        <h5> The file you uploaded is deleted right away and we never store the password anywhere. </h5>
+        <p style="color: white"> If you are looking for some examples on how to use it. You can find shares in the Github Repo to download. Just download them and upload it here.</p>
+        <ul>
+        <li> <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/Test-part1of2.vult">Test Vault 1/2 Share Android</a> </li>
+        <li><a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/Test-part2of2.vult">Test Vault 2/2 Share iPhone</a> </li>
+       <li> <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/honeypot.bak">JP's Honeypot</a>
+        </li>
+        </ul>
+        <p> You can check the code (and run it locally) from <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/tree/main">Github</a> and see the code deployed from <a href="http://replit.com/@kersch/VultisigShareDecoder">Replit</a> </p>
             ` + footerHTML + `
     </body>
     </html>
