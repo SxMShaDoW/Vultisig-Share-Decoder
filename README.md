@@ -11,6 +11,17 @@ You can (and should) run this locally.
 
 I included included [JPThor's unencrypted honeypot](https://github.com/jpthor/blockchain/blob/master/vultisig-JP%20Honeypot%20Vault-2024-09-2of3-e8e5-iPad-D3842FFB838E.bak) to test against.
 
+I also included a `Test-part1of2.vult` and `Test-part2of2.vult` 
+
+`go run main.go recover --files "Test-part1of2.vult, Test-part2of2.vult"`
+
+This will return something like this:
+```
+hex encoded private key for ethereum:2abbfad6ea48607d9665eXXXXXbed21204cfe479fdec40d33058c0a4e3feb
+```
+
+That can be imported into MetaMask
+
 ## Running the server locally (which calls the CLI)
 `go run *.go server`
 

@@ -1,4 +1,5 @@
 entrypoint = "main.go"
+# run = ["go", "run", ".", "recover", "--files", "Test-part1of2.vult, Test-part2of2.vult"]
 # run = ["go", "run", ".", "recover", "--files", "honeypot.bak"]
 run = "go run *.go server"
 modules = ["go-1.21"]
