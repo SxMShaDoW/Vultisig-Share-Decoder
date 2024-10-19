@@ -127,6 +127,18 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
                 visibility: visible;
                 opacity: 1;
             }
+            .remove-button {
+                background-color: #e94560; /* Neon pink for the remove button */
+                color: #ffffff; /* White text */
+                border: none; /* Remove default border */
+                border-radius: 5px; /* Rounded corners */
+                padding: 5px 10px; /* Padding for the button */
+                cursor: pointer; /* Pointer cursor on hover */
+            }
+    
+            .remove-button:hover {
+                background-color: #ff4d4d; /* Change color on hover */
+            }
         </style>
         <script>
             // Function to add a new file and password input
@@ -160,13 +172,44 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
                 // Append password input to its cell
                 passwordCell.appendChild(passwordInput);
 
-                // Append both cells to the new row
+                // Create remove button cell
+                const removeCell = document.createElement("td");
+                const removeButton = document.createElement("button");
+                removeButton.textContent = "X"; // Text for the button
+                removeButton.className = "remove-button"; // Add class for styling
+
+                // Inline remove function
+                removeButton.onclick = function () {
+                    // Check if there's more than one row before removing
+                    if (container.rows.length > 1) {
+                        container.removeChild(newRow); // Remove the row when clicked
+                    } else {
+                        alert("You cannot remove the last row."); // Alert user if only one row exists
+                    }
+                };
+
+                // Append the remove button to its cell
+                removeCell.appendChild(removeButton);
+
+                // Append all cells to the new row
                 newRow.appendChild(fileCell);
                 newRow.appendChild(passwordCell);
+                newRow.appendChild(removeCell);
 
                 // Add the new row to the container (tbody)
                 container.appendChild(newRow);
             }
+
+        function removeRow(button) {
+            const row = button.closest('tr'); // Get the closest row
+            const container = document.getElementById("fileContainer");
+            // Check if there's more than one row before removing
+            if (container.rows.length > 1) {
+                container.removeChild(row); // Remove the row when clicked
+            } else {
+                alert("You cannot remove the last row."); // Alert user if only one row exists
+            }
+        }
         </script>
     </head>
     <body>
@@ -174,11 +217,13 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
         <p>Why is this tool useful? </p>
             <p>It can provide you information about your backup without having to import it into the app. It will also extract your private key information in case you need to migrate to a traditional seed based app. Note: It will only extract the correct private key information if you provide more than half of the threshold files (2of2,2of3,4of6, etc)</p>
         <form enctype="multipart/form-data" action="/upload" method="post">
+        <form enctype="multipart/form-data" action="/upload" method="post">
             <table class="form-table">
                 <thead>
                     <tr>
                         <th>Select a File</th>
                         <th>Password (Optional)</th>
+                        <th>Action</th> <!-- New header for the remove action -->
                     </tr>
                 </thead>
                 <tbody id="fileContainer">
@@ -188,6 +233,9 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
                         </td>
                         <td>
                             <input type="password" name="password" />
+                        </td>
+                        <td>
+                            <button type="button" class="remove-button" onclick="removeRow(this)">X</button>
                         </td>
                     </tr>
                 </tbody>
