@@ -46,7 +46,7 @@ func (t TssKeyType) String() string {
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "server" {
-		//StartServer()
+		StartServer()
 		return
 	}
 	fmt.Println("Running in command-line mode")
