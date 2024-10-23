@@ -28,6 +28,9 @@ import (
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
 	"github.com/vultisig/mobile-tss-lib/tss"
 	"golang.org/x/term"
+	dogec "github.com/eager7/dogd/btcec"
+	dogechaincfg "github.com/eager7/dogd/chaincfg"
+	"github.com/eager7/dogutil"
 )
 
 type TssKeyType int
@@ -43,7 +46,7 @@ func (t TssKeyType) String() string {
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "server" {
-		StartServer()
+		//StartServer()
 		return
 	}
 	fmt.Println("Running in command-line mode")
@@ -369,6 +372,13 @@ func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, out
 							return showMayachainKey(key, output)
 					},
 			},
+			{
+				name:       "dogecoin",
+				derivePath: "m/44'/3'/0'/0/0",
+				action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+						return showDogecoinKey(key, output)
+				},
+			},
 		}
 
 		for _, coin := range supportedCoins {
@@ -440,6 +450,33 @@ func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *s
 	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for bitcoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
 	fmt.Fprintf(outputBuilder,"\nWIF private key for bitcoin:%s\n", wif.String())
+	return nil
+}
+
+func showDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
+	net := &dogechaincfg.MainNetParams
+	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for dogecoin:%s\n", extendedPrivateKey.String())
+	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
+	if err != nil {
+		return err
+	}
+	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
+	if err != nil {
+		return err
+	}
+	dogutilNonHardenedPrivKey, _ := dogec.PrivKeyFromBytes(dogec.S256(), nonHardenedPrivKey.Serialize())
+	wif, err := dogutil.NewWIF(dogutilNonHardenedPrivKey, net, true)
+	if err != nil {
+		return err
+	}
+
+	addressPubKey, err := dogutil.NewAddressPubKeyHash(dogutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for dogecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder,"\nWIF private key for dogecoin:%s\n", wif.String())
 	return nil
 }
 
