@@ -20,6 +20,11 @@ type SuccessData struct {
     Output string
 }
 
+// Add struct for JSON response
+type AirdropResponse struct {
+    Balance int `json:"balance"`
+}
+
 type DecodedOutput struct {
         PublicKeyECDSA  string
         PublicKeyEDDSA  string
@@ -33,6 +38,7 @@ type DecodedOutput struct {
 func StartServer() {
   http.HandleFunc("/", uploadForm)           // Serve the upload form
   http.HandleFunc("/upload", handleUpload)   // Handle file upload
+http.HandleFunc("/api/balance/", handleBalanceCheck)
   fmt.Println("Starting server on :8080...")
   if err := http.ListenAndServe(":8080", nil); err != nil {
     fmt.Println("Server failed:", err)
@@ -52,6 +58,39 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Failed to render template", http.StatusInternalServerError)
         return
     }
+}
+
+func handleBalanceCheck(w http.ResponseWriter, r *http.Request) {
+    // Extract keys from URL path
+    parts := strings.Split(r.URL.Path, "/")
+    if len(parts) < 5 {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+
+    ecdsaKey := parts[3]
+    eddsaKey := parts[4]
+
+    // Fetch balance from airdrop API
+    url := fmt.Sprintf("https://airdrop.vultisig.com/api/vault/%s/%s", ecdsaKey, eddsaKey)
+
+    resp, err := http.Get(url)
+    if err != nil {
+        http.Error(w, "Failed to fetch balance", http.StatusInternalServerError)
+        return
+    }
+    defer resp.Body.Close()
+
+    // Read and forward the response
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        http.Error(w, "Failed to read response", http.StatusInternalServerError)
+        return
+    }
+
+    // Set JSON content type
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(body)
 }
 
 func renderErrorPage(w http.ResponseWriter, err error) {
@@ -161,6 +200,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
         }
         return
     }
+    
 
     decoded := parseOutput(output)
     renderSuccess(w, decoded)

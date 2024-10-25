@@ -55,16 +55,70 @@
             background-color: #00ffcc;
             color: #1a1a2e;
         }
-
-        .airdrop-link {
-            color: #00ffcc;
-            text-decoration: none;
+        #balanceDisplay {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #0f3460;
+            border-radius: 5px;
+            display: none;
         }
-        .airdrop-link:hover {
-            text-decoration: underline;
+        #balanceDisplay.show {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .styled-button {
+            padding: 10px 20px; /* Add padding for size */
+            margin: 10px 0; /* Add margin for spacing */
+            border: none; /* Remove default border */
+            border-radius: 5px; /* Rounded corners */
+            background-color: #00ffcc; /* Dark blue background */
+            color: #a9a9e9
+            font-size: 16px; /* Font size */
+            cursor: pointer; /* Pointer cursor on hover */
+            transition: background-color 0.3s; /* Smooth background change */
+        }
+        .styled-button:hover {
+            //background-color: #1a1a2e; /* Change background on hover */
+            //color: #ffffff;
         }
     </style>
 </head>
+    <script>
+        async function checkBalance(ecdsaKey, eddsaKey) {
+            const display = document.getElementById('balanceDisplay');
+            const button = event.target;
+
+            try {
+                // Show loading state
+                button.disabled = true;
+                button.textContent = 'Checking...';
+                display.style.display = 'block';
+                display.textContent = 'Fetching balance...';
+
+                const response = await fetch(`/api/balance/${ecdsaKey}/${eddsaKey}`);
+                const data = await response.json();
+
+                // Show result with animation
+                if (!data || data.balance === undefined) {
+                    display.textContent = 'Not registered for the airdrop. Sign up for the airdrop here: https://airdrop.vultisig.com/';
+                } else {
+                    display.textContent = `Airdrop Balance: ${data.balance}`;
+                }
+                display.classList.add('show');
+            } catch (error) {
+                display.textContent = 'Error fetching balance';
+            } finally {
+                // Reset button
+                button.disabled = false;
+                button.textContent = 'Check Airdrop Balance';
+            }
+        }
+    </script>
 <body>
     <div>
     <h2>Decoded Output:</h2>
@@ -93,7 +147,8 @@
             <h3>Public Keys</h3>
             <pre>ECDSA: {{.PublicKeyECDSA}}</pre>
             <pre>EdDSA: {{.PublicKeyEDDSA}}</pre>
-            <a href="https://airdrop.vultisig.com/api/vault/{{.PublicKeyECDSA}}/{{.PublicKeyEDDSA}}" target="_blank" class="airdrop-link">View your airdrop balance</a>
+            <button onclick="checkBalance('{{.PublicKeyECDSA}}', '{{.PublicKeyEDDSA}}')" class="styled-button">Check Airdrop Balance</button>
+            <pre id="balanceDisplay"></pre>
         </div>
 
         <div class="private-keys">
