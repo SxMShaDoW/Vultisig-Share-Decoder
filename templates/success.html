@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Error</title>
+    <title>Decoded Output</title>
     <style>
         body {
             background-color: #1a1a2e; /* Dark background */
@@ -11,7 +11,7 @@
             padding: 20px;
         }
         h2 {
-            color: #ff4444; /* Bright red for error */
+            color: #00ffcc; /* Neon green for headers */
         }
         p {
             color: #a9a9e9; /* Light gray */
@@ -26,7 +26,6 @@
             white-space: pre-wrap; /* Preserve whitespace */
             word-wrap: break-word; /* Break long words */
             margin: 10px auto; /* Center align */
-            text-align: center;
         }
         input[type="submit"] {
             background-color: #00ffcc; /* Neon green for buttons */
@@ -36,10 +35,22 @@
 <body>
     <div>
     <h2>Decoded Output:</h2>
-    <p>Looks like authentication failed or there was some other error.</p>
-    </div>
-    <div><pre>{{ .Message }}</pre></div>
-
+        <p> What are some relevant things to look for: </p>
+</div>
+    <div>
+        <ul>
+            <li>Make sure the Public Key(ECDSA) and Public Key (EDDSA) are what you expect</li>
+            </br>
+            <li>The "hex encoded private key for ..." is the private key you can import into Unisat/MetaMask, etc</li>
+            </br>
+            <li>You can validate that your addresses (etherum, bitcoin, etc) match the addresses in your wallet </li>
+            </br>
+            <li>Validate the share name and all the Shares match what you expect</li>
+        </ul>
+</div>
+    <div><pre>{{.Output}}</pre></div>
+    
+    <div>
     <form action="/" method="get">
         <input type="submit" value="Check another share" />
     </form>

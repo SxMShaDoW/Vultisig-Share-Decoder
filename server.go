@@ -15,6 +15,10 @@ type ErrorData struct {
     Message string
 }
 
+type SuccessData struct {
+    Output string
+}
+
 func StartServer() {
   http.HandleFunc("/", uploadForm)           // Serve the upload form
   http.HandleFunc("/upload", handleUpload)   // Handle file upload
@@ -35,6 +39,7 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
     // Execute the main template
     if err := tmpl.Execute(w, nil); err != nil {
         http.Error(w, "Failed to render template", http.StatusInternalServerError)
+        return
     }
 }
 
@@ -51,6 +56,21 @@ func renderErrorPage(w http.ResponseWriter, err error) {
     }
     // Execute the template with the data
     if execErr := tmpl.Execute(w, data); execErr != nil {
+        http.Error(w, "Failed to render template", http.StatusInternalServerError)
+        return
+    }
+}
+
+func renderSuccess(w http.ResponseWriter, output string) {
+    tmpl, templateErr := template.ParseFiles("templates/success.html", "templates/footer.html")
+    if templateErr != nil {
+        http.Error(w, "Could not load templates", http.StatusInternalServerError)
+        return
+    }
+
+    data := SuccessData{Output: output}
+
+    if err := tmpl.Execute(w, data); err != nil {
         http.Error(w, "Failed to render template", http.StatusInternalServerError)
     }
 }
@@ -133,191 +153,11 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Respond with the output in HTML
-    fmt.Fprintf(w, `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Decoded Output</title>
-        <style>
-            body {
-                background-color: #1a1a2e; /* Dark background */
-                color: #e94560; /* Neon pink text */
-                font-family: 'Arial', sans-serif;
-                text-align: center;
-                padding: 20px;
-            }
-            h2 {
-                color: #00ffcc; /* Neon green for headers */
-            }
-            p {
-                color: #a9a9e9; /* Light gray */
-            }
-            pre {
-                background-color: #0f3460; /* Dark blue for preformatted text */
-                color: #ffffff; /* White text for preformatted */
-                padding: 10px;
-                border-radius: 5px;
-                overflow-wrap: break-word; /* Ensure long words wrap */
-                max-width: 700px; /* Set a max width */
-                white-space: pre-wrap; /* Preserve whitespace */
-                word-wrap: break-word; /* Break long words */
-                margin: 10px auto; /* Center align */
-            }
-            input[type="submit"] {
-                background-color: #00ffcc; /* Neon green for buttons */
-            }
-        </style>
-    </head>
-    <body>
-        <h2>Decoded Output:</h2>
-            <p> What are some relevant things to look for: </p>
-            <ul>
-                <li>Make sure the Public Key(ECDSA) and Public Key (EDDSA) are what you expect</li>
-                </br>
-                <li>The "hex encoded private key for ..." is the private key you can import into Unisat/MetaMask, etc</li>
-                </br>
-                <li>You can validate that your addresses (etherum, bitcoin, etc) match the addresses in your wallet </li>
-                </br>
-                <li>Validate the share name and all the Shares match what you expect</li>
-            </ul>
-        <pre>%s</pre>
-        <form action="/" method="get">
-            <input type="submit" value="Check another share" />
-        </form>
-        ` + footerHTML + `
-    </body>
-    </html>
-    `, output)
+    renderSuccess(w, output)
 
     // Delete the uploaded files
     for _, file := range uploadedFiles {
         os.Remove(file)
     }
+    return
 }
-
-
-const footerHTML = `
-    <script>
-        function toggleSection(sectionId) {
-            const content = document.getElementById(sectionId);
-            const arrow = content.previousElementSibling.querySelector('.toggle-arrow');
-
-            // Toggle the display property
-            if (content.style.display === "block") {
-                content.style.display = "none";
-                arrow.style.transform = "rotate(0deg)"; // Rotate arrow back to normal
-            } else {
-                content.style.display = "block";
-                arrow.style.transform = "rotate(180deg)"; // Rotate arrow to indicate open
-            }
-        }
-    </script>
-    <style>
-        ul {
-            list-style-type: none; /* Remove bullets */
-            padding: 0;           /* Remove default padding */
-            margin: 0;            /* Remove default margin */
-            color: #ffcc00
-        }
-        p {
-            color: #a9a9e9; /* Light gray */
-        }
-    .footer {
-        background-color: #0f3460; /* Dark blue background for the footer */
-        color: #ffffff; /* White text color */
-        padding: 20px; /* Padding around the footer */
-        border-radius: 5px; /* Rounded corners */
-        margin-top: 20px; /* Margin to separate from content above */
-    }
-
-    .toggle-header {
-        cursor: pointer; /* Change cursor to pointer for clickable headers */
-        display: flex; /* Flexbox for alignment */
-        justify-content: space-between; /* Space between title and arrow */
-        align-items: center; /* Center items vertically */
-        background-color: #1a1a2e; /* Slightly lighter background for headers */
-        padding: 10px; /* Padding inside headers */
-        border: 1px solid #00ffcc; /* Border for headers */
-        border-radius: 5px; /* Rounded corners for headers */
-        margin: 5px 0; /* Margin between headers */
-        transition: background-color 0.3s; /* Transition for background change */
-    }
-
-    .toggle-header:hover {
-        background-color: #00ffcc; /* Change background color on hover */
-        color: #1a1a2e; /* Change text color on hover */
-    }
-
-    .content {
-        display: none; /* Initially hidden */
-        padding: 10px; /* Padding inside content */
-        background-color: #1a1a2e; /* Background for content */
-        border-radius: 5px; /* Rounded corners for content */
-    }
-
-    .toggle-arrow {
-        margin-left: 10px; /* Space between text and arrow */
-        transition: transform 0.3s; /* Smooth transition for arrow rotation */
-    }
-
-    </style>
-<div>
-<div class="donate-section">
-    <h2>Support This Project</h2>
-    <p>If you find this tool helpful, please consider making a donation as it will be passed on to tools supporting this project.</p>
-    <div class="donation-addresses">
-        <div class="address-item">
-            <span class="currency">BTC:</span>
-            <span class="address">bc1qed9kurz5045myzsm25gdq52tcntpaj8x8zlat2</span>
-        <div class="address-item">
-            <span class="currency">ETH:</span>
-            <span class="address">0x5D4892B1b76157ed0b209c065F9753a55795b257</span>
-        </div>
-    </div>
-</div>
-
-    <div class="footer">
-        <div class="disclaimer-section">
-            <h2 class="toggle-header" onclick="toggleSection('disclaimerContent')">Disclaimer <span class="toggle-arrow">▼</span></h2>
-            <div class="content" id="disclaimerContent">
-                <p>Use this tool and its data at your own risk. While we strive for accuracy, it is essential that you independently verify all transaction information. The user bears sole responsibility for confirming the accuracy of any data obtained through this service.</p>
-                <p>All information provided on this site is on an "as is" basis, without any guarantees of completeness, accuracy, timeliness or of the results obtained from the use of this information. We make no representations or warranties of any kind, express or implied, about the completeness, accuracy, reliability, suitability or availability with respect to the website or the information contained on the site for any purpose.</p>
-                <p>This website is for informational purposes only and does not constitute financial, tax, or legal advice. For professional guidance, please consult with qualified financial, tax, or legal advisors. We cannot guarantee the absence of errors or full tax compliance. Consequently, we will not be liable for any losses or damages, including but not limited to indirect or consequential loss or damage, or any loss or damage whatsoever arising from loss of data or profits arising out of, or in connection with, the use of this tool.</p>
-                <p>By using this tool, you acknowledge and agree to these terms. If you do not agree with this disclaimer, please refrain from using the service.</p>
-            </div>
-        </div>
-
-        <div class="legal-section">
-            <h2 class="toggle-header" onclick="toggleSection('legalContent')">Terms of Service and Privacy Policy <span class="toggle-arrow">▼</span></h2>
-            <div class="content" id="legalContent">
-                <h3>1. Terms of Service</h3>
-                <p>By using this service, you agree to the following terms:</p>
-                <ul>
-                    <li>You will use this service responsibly and not attempt to overload or damage the system.</li>
-                    <li>You understand that the data provided is for informational purposes only and should not be considered as financial, tax, or legal advice.</li>
-                    <li>You agree not to use this service for any illegal activities or in violation of any applicable laws.</li>
-                    <li>We reserve the right to terminate or suspend access to our service for any reason, without prior notice.</li>
-                </ul>
-
-                <h3>2. Privacy Policy</h3>
-                <p>We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you about how we handle your data:</p>
-                <ul>
-                    <li>We collect a vultisig share and then delete it after processing it. We do not store or collect logs.</li>
-                    <li>We do not sell, trade, or otherwise transfer your personally identifiable information to third parties, because we do not track anything.</li>
-                    <li>We do use Replit for deployment and hosting and their privacy policy may apply.</li>
-                </ul>
-
-                <h3>3. Cookies</h3>
-                <p>We do not use Cookies.</p>
-
-                <h3>4. Changes to Our Policies</h3>
-                <p>We may update our Terms of Service and Privacy Policy from time to time. We will notify you of any changes by posting the new policies on this page.</p>
-
-                <h3>5. Contact Us</h3>
-                <p>If you have any questions about these policies, please contact us at <a href="mailto:kuji.refute847@8alias.com">kuji.refute847@8alias.com</a>.</p>
-            </div>
-        </div>
-    </div>
-</div>
-`
