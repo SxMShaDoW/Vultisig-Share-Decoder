@@ -30,25 +30,96 @@
         input[type="submit"] {
             background-color: #00ffcc; /* Neon green for buttons */
         }
+        .raw-output-section {
+            margin-top: 20px;
+        }
+
+        .raw-output-section .toggle-header {
+            cursor: pointer;
+            background-color: #1a1a2e;
+            padding: 10px;
+            border: 1px solid #00ffcc;
+            border-radius: 5px;
+            margin: 5px 0;
+            transition: background-color 0.3s;
+        }
+
+        .raw-output-section .content {
+            display: none;
+            padding: 10px;
+            background-color: #1a1a2e;
+            border-radius: 5px;
+        }
+
+        .raw-output-section .toggle-header:hover {
+            background-color: #00ffcc;
+            color: #1a1a2e;
+        }
+
+        .airdrop-link {
+            color: #00ffcc;
+            text-decoration: none;
+        }
+        .airdrop-link:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div>
     <h2>Decoded Output:</h2>
-        <p> What are some relevant things to look for: </p>
 </div>
     <div>
         <ul>
-            <li>Make sure the Public Key(ECDSA) and Public Key (EDDSA) are what you expect</li>
-            </br>
-            <li>The "hex encoded private key for ..." is the private key you can import into Unisat/MetaMask, etc</li>
-            </br>
-            <li>You can validate that your addresses (etherum, bitcoin, etc) match the addresses in your wallet </li>
-            </br>
-            <li>Validate the share name and all the Shares match what you expect</li>
+            <li> These private keys can now be imported into your favorite respective wallet (metamask,unisat,etc).</li>
+            <li>
+                The private keys will only have your balance if you uploaded more than a 50% threshold (2of2,2of3,3of5,4of7,etc) of the shares.
+            </li>
+            <li>Remember: This should be a 1 time recovery situation as Vultisig features cannot protect you after you have imported your private key into another wallet.</li>
         </ul>
+    </br>
 </div>
-    <div><pre>{{.Output}}</pre></div>
+    <div>
+    <form action="/" method="get">
+        <input type="submit" value="Check another share" />
+    </form>
+    </div>
+    <div><div class="share-details">
+            <h3>Share Details</h3>
+            <pre>{{.ShareDetails}}</pre>
+        </div>
+
+        <div class="public-keys">
+            <h3>Public Keys</h3>
+            <pre>ECDSA: {{.PublicKeyECDSA}}</pre>
+            <pre>EdDSA: {{.PublicKeyEDDSA}}</pre>
+            <a href="https://airdrop.vultisig.com/api/vault/{{.PublicKeyECDSA}}/{{.PublicKeyEDDSA}}" target="_blank" class="airdrop-link">View your airdrop balance</a>
+        </div>
+
+        <div class="private-keys">
+            <h3>Private Keys</h3>
+            {{range $chain, $key := .PrivateKeys}}
+            <pre>{{$chain}}: {{$key}}</pre>
+            {{end}}
+        </div>
+
+        <div class="addresses">
+            <h3>Addresses</h3>
+            {{range $chain, $addr := .Addresses}}
+            <pre>{{$chain}}: {{$addr}}</pre>
+            {{end}}
+        </div>
+
+        {{if .RawOutput}}
+        <div class="raw-output-section">
+            <h2 class="toggle-header" onclick="toggleSection('rawOutputContent')">
+                Raw Output <span class="toggle-arrow"></span>
+            </h2>
+            <div class="content" id="rawOutputContent">
+                <pre>{{.RawOutput}}</pre>
+            </div>
+        </div>
+        {{end}}</div>
     
     <div>
     <form action="/" method="get">

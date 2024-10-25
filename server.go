@@ -4,6 +4,7 @@ import (
   //"flag"
   "fmt"
   "io"
+    "strings"
   "net/http"
     "html/template"
   "os"
@@ -17,6 +18,16 @@ type ErrorData struct {
 
 type SuccessData struct {
     Output string
+}
+
+type DecodedOutput struct {
+        PublicKeyECDSA  string
+        PublicKeyEDDSA  string
+        PrivateKeys     map[string]string  // e.g. "ethereum" -> "key"
+        ShareName       string
+        Addresses       map[string]string  // e.g. "bitcoin" -> "address"
+        ShareDetails    string
+        RawOutput       string             // For any other unstructured data
 }
 
 func StartServer() {
@@ -61,16 +72,14 @@ func renderErrorPage(w http.ResponseWriter, err error) {
     }
 }
 
-func renderSuccess(w http.ResponseWriter, output string) {
+func renderSuccess(w http.ResponseWriter, output DecodedOutput) {
     tmpl, templateErr := template.ParseFiles("templates/success.html", "templates/footer.html")
     if templateErr != nil {
         http.Error(w, "Could not load templates", http.StatusInternalServerError)
         return
     }
 
-    data := SuccessData{Output: output}
-
-    if err := tmpl.Execute(w, data); err != nil {
+    if err := tmpl.Execute(w, output); err != nil {
         http.Error(w, "Failed to render template", http.StatusInternalServerError)
     }
 }
@@ -153,11 +162,86 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    renderSuccess(w, output)
+    decoded := parseOutput(output)
+    renderSuccess(w, decoded)
 
     // Delete the uploaded files
     for _, file := range uploadedFiles {
         os.Remove(file)
     }
     return
+}
+
+func parseOutput(rawOutput string) DecodedOutput {
+    decoded := DecodedOutput{
+        PrivateKeys: make(map[string]string),
+        Addresses:   make(map[string]string),
+    }
+
+    // Split the output into lines
+    lines := strings.Split(rawOutput, "\n")
+    var currentChain string
+
+    for _, line := range lines {
+        line = strings.TrimSpace(line)
+
+        // Parse backup details
+        if strings.HasPrefix(line, "Backup name:") {
+            decoded.ShareDetails += line + "\n"
+        } else if strings.HasPrefix(line, "This Share:") {
+            decoded.ShareDetails += line + "\n"
+        } else if strings.HasPrefix(line, "All Shares:") {
+            decoded.ShareDetails += line + "\n"
+        }
+
+        // Parse Public Keys
+        if strings.HasPrefix(line, "Public Key(ECDSA):") {
+            decoded.PublicKeyECDSA = strings.TrimSpace(strings.Split(line, ":")[1])
+        } else if strings.HasPrefix(line, "Public Key(EdDSA):") {
+            decoded.PublicKeyEDDSA = strings.TrimSpace(strings.Split(line, ":")[1])
+        }
+
+        // Track current chain context
+        if strings.HasPrefix(line, "Recovering") && strings.HasSuffix(line, "key....") {
+            currentChain = strings.TrimSuffix(strings.TrimPrefix(line, "Recovering "), " key....")
+        }
+
+        // Parse private keys
+        if strings.HasPrefix(line, "hex encoded private key for") || 
+           strings.HasPrefix(line, "private key for") ||
+           strings.HasPrefix(line, "hex encoded non-hardened private key for") {
+            parts := strings.Split(line, ":")
+            if len(parts) == 2 {
+                var chain string
+                if strings.HasPrefix(line, "hex encoded private key for") {
+                    chain = strings.TrimPrefix(parts[0], "hex encoded private key for ")
+                } else if strings.HasPrefix(line, "private key for") {
+                    chain = strings.TrimPrefix(parts[0], "private key for ")
+                } else {
+                    chain = strings.TrimPrefix(parts[0], "hex encoded non-hardened private key for ")
+                }
+                chain = strings.TrimSpace(chain)
+                // Convert chain name to lowercase for consistency
+                chain = strings.ToLower(chain)
+                decoded.PrivateKeys[chain] = strings.TrimSpace(parts[1])
+            }
+        }
+
+        // Parse addresses
+        if strings.HasPrefix(line, "address:") {
+            if currentChain != "" {
+                decoded.Addresses[currentChain] = strings.TrimSpace(strings.Split(line, ":")[1])
+            }
+        }
+
+        // Store ethereum address specifically (since it's formatted differently)
+        if strings.HasPrefix(line, "ethereum address:") {
+            decoded.Addresses["ethereum"] = strings.TrimSpace(strings.Split(line, ":")[1])
+        }
+    }
+
+    // Store raw output for reference
+    decoded.RawOutput = rawOutput
+
+    return decoded
 }
