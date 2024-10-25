@@ -31,6 +31,11 @@ import (
 	dogec "github.com/eager7/dogd/btcec"
 	dogechaincfg "github.com/eager7/dogd/chaincfg"
 	"github.com/eager7/dogutil"
+	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
+	"github.com/ltcsuite/ltcd/ltcutil"
+	"github.com/gcash/bchd/bchec"
+	bchChainCfg "github.com/gcash/bchd/chaincfg"
+	"github.com/gcash/bchutil"
 )
 
 type TssKeyType int
@@ -379,6 +384,20 @@ func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, out
 						return showDogecoinKey(key, output)
 				},
 			},
+			{
+				name:       "litecoin",
+				derivePath: "m/84'/2'/0'/0/0",
+				action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+						return showLitecoinKey(key, output)
+				}, 
+			},
+			{
+				name:       "bitcoinCash",
+				derivePath: "m/44'/145'/0'/0/0",
+				action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+						return showBitcoinCashKey(key, output)
+				},
+			},
 		}
 
 		for _, coin := range supportedCoins {
@@ -453,6 +472,33 @@ func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *s
 	return nil
 }
 
+func showBitcoinCashKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
+	net := &bchChainCfg.MainNetParams
+	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for bitcoinCash:%s\n", extendedPrivateKey.String())
+	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
+	if err != nil {
+		return err
+	}
+	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
+	if err != nil {
+		return err
+	}
+	bchNonHardenedPrivKey, _ := bchec.PrivKeyFromBytes(bchec.S256(), nonHardenedPrivKey.Serialize())
+	wif, err := bchutil.NewWIF(bchNonHardenedPrivKey, net, true)
+	if err != nil {
+		return err
+	}
+
+	addressPubKey, err := bchutil.NewAddressPubKeyHash(bchutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for bitcoinCash:%s", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder,"\nWIF private key for bitcoinCash:%s\n", wif.String())
+	return nil
+}
+
 func showDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	net := &dogechaincfg.MainNetParams
 	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for dogecoin:%s\n", extendedPrivateKey.String())
@@ -477,6 +523,32 @@ func showDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
 	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for dogecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
 	fmt.Fprintf(outputBuilder,"\nWIF private key for dogecoin:%s\n", wif.String())
+	return nil
+}
+
+func showLitecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
+	net := &ltcchaincfg.MainNetParams
+	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for litcoin:%s", extendedPrivateKey.String())
+	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
+	if err != nil {
+		return err
+	}
+	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
+	if err != nil {
+		return err
+	}
+	wif, err := ltcutil.NewWIF(nonHardenedPrivKey, net, true)
+	if err != nil {
+		return err
+	}
+
+	addressPubKey, err := ltcutil.NewAddressWitnessPubKeyHash(ltcutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for litecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder,"\nWIF private key for litecoin:%s\n", wif.String())
 	return nil
 }
 
