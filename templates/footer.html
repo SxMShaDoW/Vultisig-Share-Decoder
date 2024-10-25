@@ -62,6 +62,12 @@
   margin-left: 10px; /* Space between text and arrow */
   transition: transform 0.3s; /* Smooth transition for arrow rotation */
 }
+.arrow {
+  border: solid black;
+  border-width: 0 3px 3px 0;
+  display: inline-block;
+  padding: 3px;
+}
 
 </style>
 <div>
@@ -81,7 +87,7 @@
 
 <div class="footer">
   <div class="disclaimer-section">
-      <h2 class="toggle-header" onclick="toggleSection('disclaimerContent')">Disclaimer <span class="toggle-arrow">▼</span></h2>
+      <h2 class="toggle-header" onclick="toggleSection('disclaimerContent')">Disclaimer <span class="toggle-arrow"></span></h2>
       <div class="content" id="disclaimerContent">
           <p>Use this tool and its data at your own risk. While we strive for accuracy, it is essential that you independently verify all transaction information. The user bears sole responsibility for confirming the accuracy of any data obtained through this service.</p>
           <p>All information provided on this site is on an "as is" basis, without any guarantees of completeness, accuracy, timeliness or of the results obtained from the use of this information. We make no representations or warranties of any kind, express or implied, about the completeness, accuracy, reliability, suitability or availability with respect to the website or the information contained on the site for any purpose.</p>
@@ -91,7 +97,7 @@
   </div>
 
   <div class="legal-section">
-      <h2 class="toggle-header" onclick="toggleSection('legalContent')">Terms of Service and Privacy Policy <span class="toggle-arrow">▼</span></h2>
+      <h2 class="toggle-header" onclick="toggleSection('legalContent')">Terms of Service and Privacy Policy <span class="toggle-arrow"></span></h2>
       <div class="content" id="legalContent">
           <h3>1. Terms of Service</h3>
           <p>By using this service, you agree to the following terms:</p>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Error</title>
+    <style>
+        body {
+            background-color: #1a1a2e; /* Dark background */
+            color: #e94560; /* Neon pink text */
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        h2 {
+            color: #ff4444; /* Bright red for error */
+        }
+        p {
+            color: #a9a9e9; /* Light gray */
+        }
+        pre {
+            background-color: #0f3460; /* Dark blue for preformatted text */
+            color: #ffffff; /* White text for preformatted */
+            padding: 10px;
+            border-radius: 5px;
+            overflow-wrap: break-word; /* Ensure long words wrap */
+            max-width: 700px; /* Set a max width */
+            white-space: pre-wrap; /* Preserve whitespace */
+            word-wrap: break-word; /* Break long words */
+            margin: 10px auto; /* Center align */
+        }
+        input[type="submit"] {
+            background-color: #00ffcc; /* Neon green for buttons */
+        }
+    </style>
+</head>
+<body>
+    <div>
+    <h2>Decoded Output:</h2>
+    <p>Looks like authentication failed or there was some other error.</p>
+    </div>
+    <div style="word-wrap: break-word; width: 700px;">{{ .Message }}</div>
+
+    <form action="/" method="get">
+        <input type="submit" value="Check another share" />
+    </form>
+</div>
+        <div>
+    {{ template "footer" . }}
+        </div>
+</body>
+</html>

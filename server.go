@@ -11,6 +11,10 @@ import (
   //"github.com/urfave/cli/v2"
 )
 
+type ErrorData struct {
+    Message string
+}
+
 func StartServer() {
   http.HandleFunc("/", uploadForm)           // Serve the upload form
   http.HandleFunc("/upload", handleUpload)   // Handle file upload
@@ -34,6 +38,23 @@ func uploadForm(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func renderErrorPage(w http.ResponseWriter, err error) {
+    // Prepare the data to pass to the template
+    data := ErrorData{
+        Message: "Decoded action failed: \n" + err.Error(),
+    }
+    
+    tmpl, templateErr := template.ParseFiles("templates/error_server.html", "templates/footer.html")
+    if templateErr != nil {
+        http.Error(w, "Could not load templates", http.StatusInternalServerError)
+        return
+    }
+    // Execute the template with the data
+    if execErr := tmpl.Execute(w, data); execErr != nil {
+        http.Error(w, "Failed to render template", http.StatusInternalServerError)
+    }
+}
+
 
 
 
@@ -41,40 +62,16 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "text/html")
 
     if r.Method != "POST" {
-        fmt.Fprintf(w, `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Error</title>
-            <style>
-                body {
-                    background-color: #1a1a2e; /* Dark background */
-                    color: #e94560; /* Neon pink text */
-                    font-family: 'Arial', sans-serif;
-                    text-align: center;
-                    padding: 20px;
-                }
-                h2 {
-                    color: #ff4444; /* Bright red for error */
-                }
-                p {
-                    color: #a9a9e9; /* Light gray */
-                }
-                input[type="submit"] {
-                    background-color: #00ffcc; /* Neon green for buttons */
-                }
-            </style>
-        </head>
-        <body>
-            <h2>Error:</h2>
-            <p>Looks like you got here by mistake without uploading a file.</p>
-            <form action="/" method="get">
-                <input type="submit" value="Check another share" />
-            </form>
-            ` + footerHTML + `
-        </body>
-        </html>
-        `)
+        // Parse both the main template and the footer template
+        tmpl, err := template.ParseFiles("templates/error_noupload.html", "templates/footer.html")
+        if err != nil {
+            http.Error(w, "Could not load templates", http.StatusInternalServerError)
+            return
+        }
+        // Execute the template with the data
+        if execErr := tmpl.Execute(w, nil); execErr != nil {
+            http.Error(w, "Failed to render template", http.StatusInternalServerError)
+        }
         return
     }
 
@@ -125,6 +122,7 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
     // Process the files and passwords (to be implemented in the backend)
     output, err := ProcessFiles(uploadedFiles, passwords, Web)
     if err != nil {
+        renderErrorPage(w, err)
         // Delete the uploaded file after processing
         for _, fileHeader := range files {
              errRemove := os.Remove(fileHeader.Filename)
@@ -132,53 +130,6 @@ func handleUpload(w http.ResponseWriter, r *http.Request) {
                  fmt.Fprintf(w, "<p>Warning: Failed to delete the uploaded file: %s</p>", err.Error())
              }
         }
-        msg := "Decoded action failed: " + err.Error()
-        fmt.Fprintf(w, `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Error</title>
-            <style>
-                body {
-                    background-color: #1a1a2e; /* Dark background */
-                    color: #e94560; /* Neon pink text */
-                    font-family: 'Arial', sans-serif;
-                    text-align: center;
-                    padding: 20px;
-                }
-                h2 {
-                    color: #ff4444; /* Bright red for error */
-                }
-                p {
-                    color: #a9a9e9; /* Light gray */
-                }
-                pre {
-                    background-color: #0f3460; /* Dark blue for preformatted text */
-                    color: #ffffff; /* White text for preformatted */
-                    padding: 10px;
-                    border-radius: 5px;
-                    overflow-wrap: break-word; /* Ensure long words wrap */
-                    max-width: 700px; /* Set a max width */
-                    white-space: pre-wrap; /* Preserve whitespace */
-                    word-wrap: break-word; /* Break long words */
-                    margin: 10px auto; /* Center align */
-                }
-                input[type="submit"] {
-                    background-color: #00ffcc; /* Neon green for buttons */
-                }
-            </style>
-        </head>
-        <body>
-            <h2>Decoded Output:</h2>
-            <p>Looks like authentication failed or there was some other error.</p>
-            <div style="word-wrap: break-word; width: 700px;">%s</div>
-            <form action="/" method="get">
-                <input type="submit" value="Check another share" />
-            </form>
-            ` + footerHTML + `
-        </body>
-        </html>
-        `, msg)
         return
     }
 
