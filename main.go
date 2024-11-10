@@ -418,6 +418,13 @@ func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder 
 			},
 		},
 		{
+			name:       "dydx",
+			derivePath: "m/44'/118'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return cosmosLikeKeyHandler(key, "dydx", "valoper", "valcons", output, "DydxChain")
+			},
+		},
+		{
 			name:       "ethereum",
 			derivePath: "m/44'/60'/0'/0/0",
 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
