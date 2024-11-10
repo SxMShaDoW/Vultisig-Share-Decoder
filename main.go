@@ -22,20 +22,20 @@ import (
 	"github.com/cosmos/cosmos-sdk/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	dogec "github.com/eager7/dogd/btcec"
+	dogechaincfg "github.com/eager7/dogd/chaincfg"
+	"github.com/eager7/dogutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gcash/bchd/bchec"
+	bchChainCfg "github.com/gcash/bchd/chaincfg"
+	"github.com/gcash/bchutil"
 	"github.com/golang/protobuf/proto"
+	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
+	"github.com/ltcsuite/ltcd/ltcutil"
 	"github.com/urfave/cli/v2"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
 	"github.com/vultisig/mobile-tss-lib/tss"
 	"golang.org/x/term"
-	dogec "github.com/eager7/dogd/btcec"
-	dogechaincfg "github.com/eager7/dogd/chaincfg"
-	"github.com/eager7/dogutil"
-	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
-	"github.com/ltcsuite/ltcd/ltcutil"
-	"github.com/gcash/bchd/bchec"
-	bchChainCfg "github.com/gcash/bchd/chaincfg"
-	"github.com/gcash/bchutil"
 )
 
 type TssKeyType int
@@ -222,59 +222,58 @@ const (
 )
 
 func ProcessFiles(files []string, passwords []string, source InputSource) (string, error) {
-		var outputBuilder strings.Builder
+	var outputBuilder strings.Builder
 
-		if len(files) == 0 {
-				return "", fmt.Errorf("no files provided")
+	if len(files) == 0 {
+		return "", fmt.Errorf("no files provided")
+	}
+
+	allSecret := make([]tempLocalState, 0, len(files))
+
+	for i, f := range files {
+		var password string
+		if i < len(passwords) {
+			password = passwords[i] // Use the corresponding password if available
+		} else {
+			password = "" // Default to an empty string if passwords are missing
 		}
 
-		allSecret := make([]tempLocalState, 0, len(files))
-
-		for i, f := range files {
-				var password string
-				if i < len(passwords) {
-						password = passwords[i] // Use the corresponding password if available
-				} else {
-						password = "" // Default to an empty string if passwords are missing
-				}
-
-				if isBakFile(f) {
-						result, err := getLocalStateFromBak(f, password, source)
-						if err != nil {
-								return "", fmt.Errorf("error reading file %s: %w", f, err)
-						}
-						outputBuilder.WriteString(fmt.Sprintf("Backup name: %v\n", f))
-						outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
-						outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
-						allSecret = append(allSecret, tempLocalState{
-								FileName:   f,
-								LocalState: result,
-						})
-				} else if strings.HasSuffix(f, "dat") {
-						result, err := getLocalStateFromFile(f)
-						if err != nil {
-								return "", fmt.Errorf("error reading file %s: %w", f, err)
-						}
-						outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
-						outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
-						allSecret = append(allSecret, tempLocalState{
-								FileName:   f,
-								LocalState: result,
-						})
-				}
+		if isBakFile(f) {
+			result, err := getLocalStateFromBak(f, password, source)
+			if err != nil {
+				return "", fmt.Errorf("error reading file %s: %w", f, err)
+			}
+			outputBuilder.WriteString(fmt.Sprintf("Backup name: %v\n", f))
+			outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
+			outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
+			allSecret = append(allSecret, tempLocalState{
+				FileName:   f,
+				LocalState: result,
+			})
+		} else if strings.HasSuffix(f, "dat") {
+			result, err := getLocalStateFromFile(f)
+			if err != nil {
+				return "", fmt.Errorf("error reading file %s: %w", f, err)
+			}
+			outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", result[EdDSA].LocalPartyKey))
+			outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", result[EdDSA].KeygenCommitteeKeys))
+			allSecret = append(allSecret, tempLocalState{
+				FileName:   f,
+				LocalState: result,
+			})
 		}
+	}
 
-		threshold := len(files)
-		keyTypes := []TssKeyType{ECDSA, EdDSA}
-		for _, keyType := range keyTypes {
-				if err := getKeys(threshold, allSecret, keyType, &outputBuilder); err != nil {
-						return "", err
-				}
+	threshold := len(files)
+	keyTypes := []TssKeyType{ECDSA, EdDSA}
+	for _, keyType := range keyTypes {
+		if err := getKeys(threshold, allSecret, keyType, &outputBuilder); err != nil {
+			return "", err
 		}
+	}
 
-		return outputBuilder.String(), nil
+	return outputBuilder.String(), nil
 }
-
 
 func RecoverAction(cCtx *cli.Context) error {
 	files := cCtx.StringSlice("files")
@@ -293,126 +292,190 @@ func RecoverAction(cCtx *cli.Context) error {
 	return nil
 }
 
-func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, outputBuilder *strings.Builder) error {
-	if len(allSecrets) == 0 {
-		return fmt.Errorf("no secrets provided")
+// Cosmos-like key handler function
+func cosmosLikeKeyHandler(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string,bech32PrefixVal string,bech32PrefixNode string, outputBuilder *strings.Builder, coinName string) error {
+	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for %s:%s\n", coinName, extendedPrivateKey.String())
+
+	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
+	if err != nil {
+		return err
 	}
-	vssShares := make(vss.Shares, len(allSecrets))
-	for i, s := range allSecrets {
-		if keyType == ECDSA {
-			fmt.Fprintf(outputBuilder, "\n Public Key(%s): %v\n", keyType, s.LocalState[ECDSA].PubKey)
-			share := vss.Share{
-				Threshold: threshold,
-				ID:        s.LocalState[ECDSA].ECDSALocalData.ShareID,
-				Share:     s.LocalState[ECDSA].ECDSALocalData.Xi,
-			}
-			vssShares[i] = &share
-		} else { // EdDSA
-			fmt.Fprintf(outputBuilder, "\n Public Key(%s): %v\n", keyType, s.LocalState[EdDSA].PubKey)
-			share := vss.Share{
-				Threshold: threshold,
-				ID:        s.LocalState[EdDSA].EDDSALocalData.ShareID,
-				Share:     s.LocalState[EdDSA].EDDSALocalData.Xi,
-			}
-			vssShares[i] = &share
-		}
-	}
-	curve := binanceTss.S256()
-	if keyType == EdDSA {
-		curve = binanceTss.Edwards()
+	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
+	if err != nil {
+		return err
 	}
 
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPrivKey.Serialize()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+
+	// Cosmos SDK Bech32 address generation
+	config := sdk.GetConfig()
+	config.SetBech32PrefixForAccount(bech32PrefixAcc, bech32PrefixAcc+"pub")
+	config.SetBech32PrefixForValidator(bech32PrefixAcc + bech32PrefixVal, bech32PrefixAcc + bech32PrefixVal + "pub")
+	config.SetBech32PrefixForConsensusNode(bech32PrefixAcc + bech32PrefixNode, bech32PrefixAcc + bech32PrefixNode + "pub")
+
+	compressedPubkey := coskey.PubKey{
+		Key: nonHardenedPubKey.SerializeCompressed(),
+	}
+	addr := types.AccAddress(compressedPubkey.Address().Bytes())
+	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addr.String())
+	return nil
+}
+
+func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder *strings.Builder) error {
+	vssShares := make(vss.Shares, len(allSecrets))
+	for i, s := range allSecrets {
+		fmt.Fprintf(outputBuilder, "\n Public Key(ECDSA): %v\n", s.LocalState[ECDSA].PubKey)
+		share := vss.Share{
+			Threshold: threshold,
+			ID:        s.LocalState[ECDSA].ECDSALocalData.ShareID,
+			Share:     s.LocalState[ECDSA].ECDSALocalData.Xi,
+		}
+		vssShares[i] = &share
+	}
+
+	curve := binanceTss.S256()
 	tssPrivateKey, err := vssShares[:threshold].ReConstruct(curve)
 	if err != nil {
 		return err
 	}
 	privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
 	publicKey := privateKey.PubKey()
-	
+
 	hexPubKey := hex.EncodeToString(publicKey.SerializeCompressed())
-	// unharden derive all the keys
-	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(%s): %s\n", keyType, hexPubKey)
-	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(%s):%s\n", keyType, hex.EncodeToString(privateKey.Serialize()))
-	if keyType == ECDSA {
-		net := &chaincfg.MainNetParams
-		chaincode := allSecrets[0].LocalState[ECDSA].ChainCodeHex
-		fmt.Fprintf(outputBuilder, "\nchaincode: %s\n", chaincode)
-		chaincodeBuf, err := hex.DecodeString(chaincode)
+	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(ECDSA): %s\n", hexPubKey)
+	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(ECDSA): %s\n", hex.EncodeToString(privateKey.Serialize()))
+
+	// Example for Bitcoin derivation
+	net := &chaincfg.MainNetParams
+	chaincode := allSecrets[0].LocalState[ECDSA].ChainCodeHex
+	fmt.Fprintf(outputBuilder, "\nchaincode: %s\n", chaincode)
+	chaincodeBuf, err := hex.DecodeString(chaincode)
+	if err != nil {
+		return err
+	}
+	extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincodeBuf, []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
+	fmt.Fprintf(outputBuilder, "\nextended private key full: %s\n", extendedPrivateKey.String())
+
+	supportedCoins := []struct {
+		name       string
+		derivePath string
+		action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
+	}{
+		{
+			name:       "bitcoin",
+			derivePath: "m/84'/0'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return showBitcoinKey(key, output)
+			},
+		},
+		{
+			name:       "bitcoinCash",
+			derivePath: "m/44'/145'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return showBitcoinCashKey(key, output)
+			},
+		},
+		{
+			name:       "dogecoin",
+			derivePath: "m/44'/3'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return showDogecoinKey(key, output)
+			},
+		},
+		{
+			name:       "litecoin",
+			derivePath: "m/84'/2'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return showLitecoinKey(key, output)
+			},
+		},
+		{
+			name:       "thorchain",
+			derivePath: "m/44'/931'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return cosmosLikeKeyHandler(key, "thor", "v", "c", output, "THORChain")
+			},
+		},
+		{
+			name:       "mayachain",
+			derivePath: "m/44'/931'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return cosmosLikeKeyHandler(key, "maya", "v", "c", output, "MayaChain")
+			},
+		},
+		{
+			name:       "atomchain",
+			derivePath: "m/44'/118'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return cosmosLikeKeyHandler(key, "cosmos", "valoper", "valcons", output, "ATOMChain")
+			},
+		},
+		{
+			name:       "ethereum",
+			derivePath: "m/44'/60'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return showEthereumKey(key, output)
+			},
+		},
+	}
+
+	// Ensure that we pass the correct key generation logic based on the coin type
+	for _, coin := range supportedCoins {
+		fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.name)
+		key, err := getDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
 		if err != nil {
-			return err
+			return fmt.Errorf("error deriving private key for %s: %w", coin.name, err)
 		}
-		extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincodeBuf, []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
-		fmt.Fprintf(outputBuilder,"\nextended private key full: %s\n", extendedPrivateKey.String())
-
-		supportedCoins := []struct {
-			name       string
-			derivePath string
-			action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
-		}{
-			{
-					name:       "bitcoin",
-					derivePath: "m/84'/0'/0'/0/0",
-					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-							return showBitcoinKey(key, output)
-					},
-			},
-			{
-					name:       "ethereum",
-					derivePath: "m/44'/60'/0'/0/0",
-					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-							return showEthereumKey(key, output)
-					},
-			},
-			{
-					name:       "thorchain",
-					derivePath: "m/44'/931'/0'/0/0",
-					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-							return showThorchainKey(key, output)
-					},
-			},
-			{
-					name:       "mayachain",
-					derivePath: "m/44'/931'/0'/0/0",
-					action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-							return showMayachainKey(key, output)
-					},
-			},
-			{
-				name:       "dogecoin",
-				derivePath: "m/44'/3'/0'/0/0",
-				action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-						return showDogecoinKey(key, output)
-				},
-			},
-			{
-				name:       "litecoin",
-				derivePath: "m/84'/2'/0'/0/0",
-				action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-						return showLitecoinKey(key, output)
-				}, 
-			},
-			{
-				name:       "bitcoinCash",
-				derivePath: "m/44'/145'/0'/0/0",
-				action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-						return showBitcoinCashKey(key, output)
-				},
-			},
-		}
-
-		for _, coin := range supportedCoins {
-			fmt.Fprintf(outputBuilder,"\nRecovering %s key....\n", coin.name)
-			key, err := getDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
-			if err != nil {
-				return fmt.Errorf("error deriving private key for %s: %w", coin.name, err)
-			}
-			fmt.Fprintf(outputBuilder,"\nprivate key for %s: %s \n",coin.name,key.String())
-			if err := coin.action(key, outputBuilder); err != nil {
-				fmt.Println("error showing keys for ", coin.name, "error:", err)
-			}
+		fmt.Fprintf(outputBuilder, "\nprivate key for %s: %s \n", coin.name, key.String())
+		if err := coin.action(key, outputBuilder); err != nil {
+			fmt.Println("error showing keys for", coin.name, "error:", err)
 		}
 	}
+
 	return nil
+}
+
+func processEdDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder *strings.Builder) error {
+	vssShares := make(vss.Shares, len(allSecrets))
+	for i, s := range allSecrets {
+		fmt.Fprintf(outputBuilder, "\n Public Key(EdDSA): %v\n", s.LocalState[EdDSA].PubKey)
+		share := vss.Share{
+			Threshold: threshold,
+			ID:        s.LocalState[EdDSA].EDDSALocalData.ShareID,
+			Share:     s.LocalState[EdDSA].EDDSALocalData.Xi,
+		}
+		vssShares[i] = &share
+	}
+
+	curve := binanceTss.Edwards()
+	tssPrivateKey, err := vssShares[:threshold].ReConstruct(curve)
+	if err != nil {
+		return err
+	}
+	privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
+	publicKey := privateKey.PubKey()
+
+	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(EdDSA): %s\n", hex.EncodeToString(publicKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(EdDSA): %s\n", hex.EncodeToString(privateKey.Serialize()))
+
+
+	return nil
+}
+
+func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, outputBuilder *strings.Builder) error {
+	if len(allSecrets) == 0 {
+		return fmt.Errorf("no secrets provided")
+	}
+
+	switch keyType {
+	case ECDSA:
+		return processECDSAKeys(threshold, allSecrets, outputBuilder)
+	case EdDSA:
+		return processEdDSAKeys(threshold, allSecrets, outputBuilder)
+	default:
+		return fmt.Errorf("unsupported key type: %v", keyType)
+	}
 }
 
 func getDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -440,15 +503,15 @@ func showEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
 		return err
 	}
 
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for ethereum:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for ethereum:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	fmt.Fprintf(outputBuilder, "\nhex encoded private key for ethereum:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-	fmt.Fprintf(outputBuilder,"\nethereum address:%s\n", crypto.PubkeyToAddress(*nonHardenedPubKey.ToECDSA()).Hex())
+	fmt.Fprintf(outputBuilder, "\nethereum address:%s\n", crypto.PubkeyToAddress(*nonHardenedPubKey.ToECDSA()).Hex())
 	return nil
 }
 
 func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	net := &chaincfg.MainNetParams
-	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for bitcoin:%s\n", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for bitcoin:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -466,15 +529,15 @@ func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *s
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for bitcoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder,"\nWIF private key for bitcoin:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for bitcoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoin:%s\n", wif.String())
 	return nil
 }
 
 func showBitcoinCashKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	net := &bchChainCfg.MainNetParams
-	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for bitcoinCash:%s\n", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for bitcoinCash:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -493,15 +556,15 @@ func showBitcoinCashKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilde
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for bitcoinCash:%s", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder,"\nWIF private key for bitcoinCash:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for bitcoinCash:%s", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoinCash:%s\n", wif.String())
 	return nil
 }
 
 func showDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	net := &dogechaincfg.MainNetParams
-	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for dogecoin:%s\n", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for dogecoin:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -520,15 +583,15 @@ func showDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for dogecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder,"\nWIF private key for dogecoin:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for dogecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for dogecoin:%s\n", wif.String())
 	return nil
 }
 
 func showLitecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 	net := &ltcchaincfg.MainNetParams
-	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for litcoin:%s", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for litcoin:%s", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -546,15 +609,15 @@ func showLitecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for litecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder,"\nWIF private key for litecoin:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for litecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for litecoin:%s\n", wif.String())
 	return nil
 }
 
 func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
 
-	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for THORChain:%s\n", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for THORChain:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -564,8 +627,8 @@ func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder 
 		return err
 	}
 
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened private key for THORChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for THORChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for THORChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for THORChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	config := sdk.GetConfig()
 	config.SetBech32PrefixForAccount("thor", "thorpub")
 	config.SetBech32PrefixForValidator("thorv", "thorvpub")
@@ -575,12 +638,12 @@ func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder 
 		Key: nonHardenedPubKey.SerializeCompressed(),
 	}
 	addr := types.AccAddress(compressedPubkey.Address().Bytes())
-	fmt.Fprintf(outputBuilder,"address:%s", addr.String())
+	fmt.Fprintf(outputBuilder, "address:%s", addr.String())
 	return nil
 }
 
 func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-	fmt.Fprintf(outputBuilder,"\nnon-hardened extended private key for MAYAChain:%s\n", extendedPrivateKey.String())
+	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for MAYAChain:%s\n", extendedPrivateKey.String())
 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
 	if err != nil {
 		return err
@@ -590,8 +653,8 @@ func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder 
 		return err
 	}
 
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened private key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-	fmt.Fprintf(outputBuilder,"\nhex encoded non-hardened public key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
+	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	config := sdk.GetConfig()
 	config.SetBech32PrefixForAccount("maya", "mayapub")
 	config.SetBech32PrefixForValidator("mayav", "mayavpub")
@@ -601,7 +664,7 @@ func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder 
 		Key: nonHardenedPubKey.SerializeCompressed(),
 	}
 	addr := types.AccAddress(compressedPubkey.Address().Bytes())
-	fmt.Fprintf(outputBuilder,"\naddress:%s\n", addr.String())
+	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addr.String())
 	return nil
 }
 
