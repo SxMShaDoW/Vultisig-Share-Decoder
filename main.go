@@ -418,10 +418,24 @@ func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder 
 			},
 		},
 		{
-			name:       "dydx",
+			name:       "dydxchain",
 			derivePath: "m/44'/118'/0'/0/0",
 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
 				return cosmosLikeKeyHandler(key, "dydx", "valoper", "valcons", output, "DydxChain")
+			},
+		},
+		{
+			name:       "terraclassicchain",
+			derivePath: "m/44'/118'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return cosmosLikeKeyHandler(key, "terra", "valoper", "valcons", output, "terraclassicchain")
+			},
+		},
+		{
+			name:       "terrachain",
+			derivePath: "m/44'/118'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return cosmosLikeKeyHandler(key, "terra", "valoper", "valcons", output, "terrachain")
 			},
 		},
 		{
