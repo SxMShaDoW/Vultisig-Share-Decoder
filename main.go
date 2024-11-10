@@ -292,34 +292,33 @@ func RecoverAction(cCtx *cli.Context) error {
 	return nil
 }
 
-// Cosmos-like key handler function
-func cosmosLikeKeyHandler(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string,bech32PrefixVal string,bech32PrefixNode string, outputBuilder *strings.Builder, coinName string) error {
-	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for %s:%s\n", coinName, extendedPrivateKey.String())
+func cosmosLikeKeyHandler(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, bech32PrefixVal string, bech32PrefixNode string, outputBuilder *strings.Builder, coinName string) error {
+		fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for %s:%s\n", coinName, extendedPrivateKey.String())
 
-	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-	if err != nil {
-		return err
-	}
-	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-	if err != nil {
-		return err
-	}
+		nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
+		if err != nil {
+				return err
+		}
+		nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
+		if err != nil {
+				return err
+		}
 
-	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
+		fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPrivKey.Serialize()))
+		fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 
-	// Cosmos SDK Bech32 address generation
-	config := sdk.GetConfig()
-	config.SetBech32PrefixForAccount(bech32PrefixAcc, bech32PrefixAcc+"pub")
-	config.SetBech32PrefixForValidator(bech32PrefixAcc + bech32PrefixVal, bech32PrefixAcc + bech32PrefixVal + "pub")
-	config.SetBech32PrefixForConsensusNode(bech32PrefixAcc + bech32PrefixNode, bech32PrefixAcc + bech32PrefixNode + "pub")
+		compressedPubkey := coskey.PubKey{
+				Key: nonHardenedPubKey.SerializeCompressed(),
+		}
 
-	compressedPubkey := coskey.PubKey{
-		Key: nonHardenedPubKey.SerializeCompressed(),
-	}
-	addr := types.AccAddress(compressedPubkey.Address().Bytes())
-	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addr.String())
-	return nil
+		// Generate the address bytes
+		addrBytes := types.AccAddress(compressedPubkey.Address().Bytes())
+
+		// Use sdk.Bech32ifyAccPub with the correct prefix
+		bech32Addr := sdk.MustBech32ifyAddressBytes(bech32PrefixAcc, addrBytes)
+
+		fmt.Fprintf(outputBuilder, "\naddress:%s\n", bech32Addr)
+		return nil
 }
 
 func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder *strings.Builder) error {
@@ -409,6 +408,13 @@ func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder 
 			derivePath: "m/44'/118'/0'/0/0",
 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
 				return cosmosLikeKeyHandler(key, "cosmos", "valoper", "valcons", output, "ATOMChain")
+			},
+		},
+		{
+			name:       "kujirachain",
+			derivePath: "m/44'/118'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return cosmosLikeKeyHandler(key, "kujira", "valoper", "valcons", output, "KujiraChain")
 			},
 		},
 		{
