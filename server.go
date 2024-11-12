@@ -29,6 +29,7 @@ type DecodedOutput struct {
         PublicKeyECDSA  string
         PublicKeyEDDSA  string
         PrivateKeys     map[string]string  // e.g. "ethereum" -> "key"
+        WIFPrivateKeys  map[string]string  // e.g. "bitcoin WIF" -> "key"
         ShareName       string
         Addresses       map[string]string  // e.g. "bitcoin" -> "address"
         ShareDetails    string
@@ -114,6 +115,7 @@ func renderErrorPage(w http.ResponseWriter, err error) {
 func renderSuccess(w http.ResponseWriter, output DecodedOutput) {
     tmpl, templateErr := template.ParseFiles("templates/success.html", "templates/footer.html")
     if templateErr != nil {
+        fmt.Printf("Error loading templates: %v", templateErr)
         http.Error(w, "Could not load templates", http.StatusInternalServerError)
         return
     }
@@ -216,6 +218,7 @@ func parseOutput(rawOutput string) DecodedOutput {
     decoded := DecodedOutput{
         PrivateKeys: make(map[string]string),
         Addresses:   make(map[string]string),
+        WIFPrivateKeys: make(map[string]string),
     }
 
     // Split the output into lines
@@ -246,22 +249,30 @@ func parseOutput(rawOutput string) DecodedOutput {
             currentChain = strings.TrimSuffix(strings.TrimPrefix(line, "Recovering "), " key....")
         }
 
+        if strings.HasPrefix(line, "WIF private key for") {
+            parts := strings.LastIndex(line, ":")
+            if parts != -1 {
+                chainFull := line[len("WIF private key for "):parts]
+                chainFull = strings.TrimSpace(chainFull)
+                chainFull = strings.ToLower(chainFull)
+                privateKey := strings.TrimSpace(line[parts+1:])
+                decoded.WIFPrivateKeys[chainFull] = privateKey
+            }
+            continue
+        }
+
         // Parse private keys
         if strings.HasPrefix(line, "hex encoded private key for") || 
-           strings.HasPrefix(line, "private key for") ||
            strings.HasPrefix(line, "hex encoded non-hardened private key for") {
             parts := strings.Split(line, ":")
             if len(parts) == 2 {
                 var chain string
                 if strings.HasPrefix(line, "hex encoded private key for") {
                     chain = strings.TrimPrefix(parts[0], "hex encoded private key for ")
-                } else if strings.HasPrefix(line, "private key for") {
-                    chain = strings.TrimPrefix(parts[0], "private key for ")
-                } else {
+                } else if strings.HasPrefix(line, "hex encoded non-hardened private key for") {
                     chain = strings.TrimPrefix(parts[0], "hex encoded non-hardened private key for ")
                 }
                 chain = strings.TrimSpace(chain)
-                // Convert chain name to lowercase for consistency
                 chain = strings.ToLower(chain)
                 decoded.PrivateKeys[chain] = strings.TrimSpace(parts[1])
             }

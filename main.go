@@ -558,7 +558,7 @@ func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *s
 	}
 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for bitcoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoin:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoin: p2wpkh:%s\n", wif.String())
 	return nil
 }
 
@@ -585,7 +585,7 @@ func showBitcoinCashKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilde
 	}
 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for bitcoinCash:%s", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoinCash:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoinCash: %s\n", wif.String())
 	return nil
 }
 
@@ -612,7 +612,7 @@ func showDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
 	}
 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for dogecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder, "\nWIF private key for dogecoin:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for dogecoin: %s\n", wif.String())
 	return nil
 }
 
@@ -638,7 +638,7 @@ func showLitecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *
 	}
 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for litecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-	fmt.Fprintf(outputBuilder, "\nWIF private key for litecoin:%s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "\nWIF private key for litecoin: %s\n", wif.String())
 	return nil
 }
 

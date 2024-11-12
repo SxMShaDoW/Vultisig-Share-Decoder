@@ -125,7 +125,9 @@
 </div>
     <div>
         <ul>
-            <li> These private keys can now be imported into your favorite respective wallet (metamask,unisat,etc).</li>
+            <li> The WIF private keys for Bitcoin-like networks can be imported into  tools such as Electrum.</li>
+            <li> The private keys for Ethereum networks can be imported into tools such as Metamask.</li>
+            <li> The private keys for Cosmos networks can be imported into tools such as Keplr.</li>
             <li>
                 The private keys will only have your balance if you uploaded more than a 50% threshold (2of2,2of3,3of5,4of7,etc) of the shares.
             </li>
@@ -149,6 +151,13 @@
             <pre>EdDSA: {{.PublicKeyEDDSA}}</pre>
             <button onclick="checkBalance('{{.PublicKeyECDSA}}', '{{.PublicKeyEDDSA}}')" class="styled-button">Check Airdrop Balance</button>
             <pre id="balanceDisplay"></pre>
+        </div>
+
+        <div class="private-keys">
+            <h3>WIF Private Keys</h3>
+            {{range $chain, $key := .WIFPrivateKeys}}
+            <pre>{{$chain}}:{{$key}}</pre>
+            {{end}}
         </div>
 
         <div class="private-keys">
