@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vault Key Recovery</title>
+    <style>
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+
+        .file-group {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .add-file-btn {
+            margin: 10px 0;
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .remove-file-btn {
+            margin-left: 10px;
+            padding: 2px 5px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .results-section {
+            margin-top: 20px;
+        }
+
+        #recoverBtn {
+            padding: 10px 20px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .debug-section {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #debugOutput {
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+
+      /* Add spinner styles */
+      .loader-container {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(255, 255, 255, 0.95);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+      }
+      .loader {
+          border: 4px solid #f3f3f3;
+          border-top: 4px solid #3498db;
+          border-radius: 50%;
+          width: 40px;
+          height: 40px;
+          animation: spin 1s linear infinite;
+          margin: 0 auto;
+          margin-top: 20px;
+      }
+      .loader-message {
+          text-align: center;
+          font-family: Arial, sans-serif;
+          color: #333;
+          margin-bottom: 20px;
+      }
+      .loader-content {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+      }
+      @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+      }
+      /* Hide content while loading */
+      .content-container {
+          display: none;
+      }
+    </style>
+</head>
+  <body>
+    <!-- Update just the loader section of the HTML -->
+    <div id="loader" class="loader-container">
+        <div class="loader-content">
+            <div class="loader-message">
+                Loading the server code in the browser...
+            </div>
+            <div class="loader"></div>
+        </div>
+    </div>
+    <!-- Wrap main content in container -->
+    <div id="content" class="content-container">
+        <div class="container">
+            <h1>Vault Key Recovery</h1>
+            <div id="fileInputs">
+                <div class="file-group" id="fileGroup0">
+                    <input type="file" accept=".bak,.vult" />
+                    <input type="password" placeholder="Password (optional)" />
+                    <button class="remove-file-btn" onclick="removeFileInput(0)">Remove</button>
+                </div>
+            </div>
+            <button class="add-file-btn" onclick="addFileInput()">Add Another File Group</button>
+            <button id="recoverBtn" onclick="recoverKeys()">Recover Keys</button>
+            <div id="results" class="results-section"></div>
+            <div class="debug-section">
+                <h3>Debug Output</h3>
+                <div id="debugOutput"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="wasm_exec.js"></script>
+    <script>
+        let fileGroupCounter = 1;
+        function hideLoader() {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('content').style.display = 'block';
+            debugLog("UI initialized and ready");
+        }
+        function debugLog(message) {
+            const debugOutput = document.getElementById('debugOutput');
+            const timestamp = new Date().toISOString();
+            debugOutput.innerHTML += `${timestamp}: ${message}\n`;
+        }
+        // Initialize WASM
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+            .then((result) => {
+                go.run(result.instance);
+                debugLog("WASM initialized successfully");
+                hideLoader(); // Hide loader after WASM is initialized
+            })
+            .catch(err => {
+                debugLog(`WASM initialization error: ${err}`);
+                // Show error in loader
+                document.querySelector('.loader-container').innerHTML = 
+                    `<div style="color: red;">Error loading application: ${err}</div>`;
+            });
+
+      function addFileInput() {
+          const container = document.getElementById('fileInputs');
+          const groupDiv = document.createElement('div');
+          groupDiv.className = 'file-group';
+          groupDiv.id = `fileGroup${fileGroupCounter}`;
+          groupDiv.innerHTML = `
+              <input type="file" accept=".bak,.vult" />
+              <input type="password" placeholder="Password (optional)" />
+              <button class="remove-file-btn" onclick="removeFileInput(${fileGroupCounter})">Remove</button>
+          `;
+          container.appendChild(groupDiv);
+          fileGroupCounter++;
+          debugLog(`Added new file input group ${fileGroupCounter}`);
+      }
+
+        function removeFileInput(id) {
+            const element = document.getElementById(`fileGroup${id}`);
+            if (element) {
+                element.remove();
+                debugLog(`Removed file input group ${id}`);
+            }
+        }
+
+        async function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const content = new Uint8Array(e.target.result);
+                    debugLog(`Read file ${file.name}: ${content.length} bytes`);
+                    resolve(content);
+                };
+                reader.onerror = (e) => {
+                    debugLog(`Error reading file ${file.name}: ${e}`);
+                    reject(e);
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+      async function recoverKeys() {
+          const fileGroups = document.querySelectorAll('.file-group');
+          const files = [];
+          const passwords = [];
+          const fileNames = new Set(); // Track unique file names
+
+          try {
+              // Collect all file data and passwords
+              for (let fileGroup of fileGroups) {
+                  const fileInput = fileGroup.querySelector('input[type="file"]');
+                  const passwordInput = fileGroup.querySelector('input[type="password"]');
+
+                  if (fileInput.files.length > 0) {
+                      const file = fileInput.files[0];
+
+                      // Check for duplicate files
+                      if (fileNames.has(file.name)) {
+                          throw new Error(`Duplicate file detected: ${file.name}. Please select different files.`);
+                      }
+                      fileNames.add(file.name);
+
+                      const fileData = await file.arrayBuffer();
+                      files.push(new Uint8Array(fileData));
+                      passwords.push(passwordInput.value || "");
+                  }
+              }
+
+              if (files.length === 0) {
+                  throw new Error("Please select at least one file to process.");
+              }
+
+              const result = window.ProcessFiles(files, passwords);
+              if (!result || result === "undefined") {
+                  throw new Error("No results were generated. Make sure you are using different shares.");
+              }
+
+              document.getElementById('results').innerText = result;
+
+          } catch (error) {
+              document.getElementById('results').innerText = `Error: ${error.message}`;
+              console.error(error); // For debugging purposes
+          }
+      }
+
+        function displayResults(result) {
+            const resultDiv = document.getElementById('results');
+            resultDiv.innerHTML = '';
+            
+            if (typeof result === 'string' && result.toLowerCase().includes('error')) {
+                resultDiv.innerHTML = `<div class="error">${result}</div>`;
+                debugLog(`Error in results: ${result}`);
+                return;
+            }
+
+            debugLog('Processing results for display');
+            
+            const pre = document.createElement('pre');
+            pre.style.whiteSpace = 'pre-wrap';
+            pre.style.wordBreak = 'break-all';
+            pre.textContent = result;
+            resultDiv.appendChild(pre);
+            debugLog('Results displayed successfully');
+        }
+    </script>
+</body>
+</html>

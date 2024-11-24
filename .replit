@@ -1,12 +1,8 @@
 entrypoint = "main.go"
-# run = ["go", "run", ".", "recover", "--files", "Test-part1of2.vult, Test-part2of2.vult"]
-# run = ["go", "run", ".", "recover", "--files", "honeypot.bak"]
-run = "go run *.go server"
+# run = "make cli && ./cli/cli-recover recover --files honeypot.bak"
+# run = "make cli && ./cli/cli-recover recover --files Test-part1of2.vult --files Test-part2of2.vult"
+run = "make all && ./backend/main_backend"
 modules = ["go-1.21"]
-
-[[ports]]
-localPort = 8080
-externalPort = 80
 
 
 [env]
@@ -19,10 +15,14 @@ channel = "stable-24_05"
 requiredFiles = [".replit"]
 
 [deployment]
-build = "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o vultisigdecoder *.go"
-run = "./vultisigdecoder server"
+build = "make all"
+run = "./backend/main_backend"
 ignorePorts = false
 deploymentTarget = "cloudrun"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-149b9641-398f-4de6-9ec3-82b50061bd0c"
+
+[[ports]]
+localPort = 8080
+externalPort = 80

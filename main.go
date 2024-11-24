@@ -1,225 +1,135 @@
+//go:build cli
+// +build cli
 package main
 
 import (
-	//"crypto/aes"
-	//"crypto/cipher"
-	//"crypto/sha256"
 	"encoding/base64"
-	//"encoding/hex"
-	//"encoding/json"
 	"fmt"
 	"os"
+	"log"
 	"path/filepath"
 	"strings"
-	//"syscall"
-
-	//"github.com/bnb-chain/tss-lib/v2/crypto/vss"
-	//binanceTss "github.com/bnb-chain/tss-lib/v2/tss"
-	//"github.com/btcsuite/btcd/btcutil"
-	//"github.com/btcsuite/btcd/btcutil/hdkeychain"
-	//"github.com/btcsuite/btcd/chaincfg"
-	//coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-	//"github.com/cosmos/cosmos-sdk/types"
-	//sdk "github.com/cosmos/cosmos-sdk/types"
-	//"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	//dogec "github.com/eager7/dogd/btcec"
-	//dogechaincfg "github.com/eager7/dogd/chaincfg"
-	//"github.com/eager7/dogutil"
-	//"github.com/ethereum/go-ethereum/crypto"
-	//"github.com/gcash/bchd/bchec"
-	//bchChainCfg "github.com/gcash/bchd/chaincfg"
-	//"github.com/gcash/bchutil"
 	"github.com/golang/protobuf/proto"
-	//ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
-	//"github.com/ltcsuite/ltcd/ltcutil"
 	"github.com/urfave/cli/v2"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
-	//"github.com/vultisig/mobile-tss-lib/tss"
-	//"golang.org/x/term"
+	"github.com/vultisig/mobile-tss-lib/tss"
+	"encoding/json"
 )
 
-// type TssKeyType int
+// main.go modifications:
 
-// const (
-// 	ECDSA TssKeyType = iota
-// 	EdDSA
-// )
+func ProcessFileContent(fileData [][]byte, passwords []string, source InputSource) (string, error) {
+		var allSecrets []tempLocalState
 
-// func (t TssKeyType) String() string {
-// 	return [...]string{"ECDSA", "EdDSA"}[t]
-// }
+		// Process each file
+		for i, data := range fileData {
+				contentStr := strings.TrimSpace(string(data))
 
-func main() {
-	if len(os.Args) > 1 && os.Args[1] == "server" {
-		StartServer()
-		return
-	}
-	fmt.Println("Running in command-line mode")
-	app := cli.App{
-		Name:  "key-recover",
-		Usage: "Recover a key from a set of TSS key shares , need at least threshold number of shares to recover the key",
-		Commands: []*cli.Command{
-			{
-				Name:   "decrypt",
-				Action: decryptFileAction,
-				Usage:  "decrypt files",
-			},
-			{
-				Name: "recover",
-				Flags: []cli.Flag{
-					&cli.StringSliceFlag{
-						Name:       "files",
-						Usage:      "path to key share files",
-						Required:   true,
-						HasBeenSet: false,
-					},
-				},
-				Action: RecoverAction,
-			},
-		},
-	}
-	if err := app.Run(os.Args); err != nil {
-		panic(err)
-	}
+				log.Printf("Processing file %d, content starts with: %s", i, contentStr[:min(len(contentStr), 50)])
+
+				password := ""
+				if i < len(passwords) {
+						password = passwords[i]
+				}
+
+				var localStates map[TssKeyType]tss.LocalState
+				var err error
+
+				decodedData, err := base64.StdEncoding.DecodeString(contentStr)
+				if err != nil {
+						log.Printf("File %d is not base64 encoded, trying direct parsing", i)
+						decodedData = data
+				} else {
+						log.Printf("File %d successfully decoded from base64", i)
+				}
+
+				var vaultContainer v1.VaultContainer
+				if err := proto.Unmarshal(decodedData, &vaultContainer); err != nil {
+						log.Printf("Failed to unmarshal as protobuf: %v", err)
+						localStates, err = getLocalStateFromContent(decodedData)
+						if err != nil {
+								return "", fmt.Errorf("error processing file %d: %w", i, err)
+						}
+				} else {
+						log.Printf("Successfully unmarshalled as protobuf VaultContainer")
+						localStates, err = getLocalStateFromBakContent([]byte(contentStr), password, source)
+						if err != nil {
+								return "", fmt.Errorf("error processing vault container file %d: %w", i, err)
+						}
+				}
+
+				allSecrets = append(allSecrets, tempLocalState{
+						FileName:   fmt.Sprintf("file_%d", i),
+						LocalState: localStates,
+				})
+		}
+
+		// Use provided threshold or calculate default
+		threshold := len(allSecrets)
+
+		log.Printf("Using threshold %d for %d secrets", threshold, len(allSecrets))
+
+		var outputBuilder strings.Builder
+		if err := getKeys(threshold, allSecrets, ECDSA, &outputBuilder); err != nil {
+				return "", fmt.Errorf("error processing ECDSA keys: %w", err)
+		}
+		if err := getKeys(threshold, allSecrets, EdDSA, &outputBuilder); err != nil {
+				return "", fmt.Errorf("error processing EdDSA keys: %w", err)
+		}
+
+		return outputBuilder.String(), nil
 }
 
-// // getLocalStateFromBak read the keyshare from backup file , ask password for decryption if the file is encrypted
-// func getLocalStateFromBak(inputFileName string, password string, source InputSource) (map[TssKeyType]tss.LocalState, error) {
-// 	filePathName, err := filepath.Abs(inputFileName)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error getting absolute path for file %s: %w", inputFileName, err)
-// 	}
-// 	_, err = os.Stat(filePathName)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error reading file %s: %w", inputFileName, err)
-// 	}
-// 	fileContent, err := readFileContent(filePathName)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error reading file %s: %w", inputFileName, err)
-// 	}
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+			return a
+	}
+	return b
+}
 
-// 	rawContent, err := base64.StdEncoding.DecodeString(string(fileContent))
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error decoding file %s: %w", inputFileName, err)
-// 	}
-// 	var vaultContainer v1.VaultContainer
-// 	if err := proto.Unmarshal(rawContent, &vaultContainer); err != nil {
-// 		return nil, fmt.Errorf("error unmarshalling file %s: %w", inputFileName, err)
-// 	}
+// Add this helper function to parse vault
+func parseVault(vault *v1.Vault) (map[TssKeyType]tss.LocalState, error) {
+	localStates := make(map[TssKeyType]tss.LocalState)
+	for _, keyshare := range vault.KeyShares {
+			var localState tss.LocalState
+			if err := json.Unmarshal([]byte(keyshare.Keyshare), &localState); err != nil {
+					return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
+			}
+			if keyshare.PublicKey == vault.PublicKeyEcdsa {
+					localStates[ECDSA] = localState
+			} else {
+					localStates[EdDSA] = localState
+			}
+	}
+	return localStates, nil
+}
 
-// 	var decryptedVault *v1.Vault
-// 	if vaultContainer.IsEncrypted {
-// 		// Attempt to decrypt the vault with the provided or entered password
-// 		decryptedVault, err = decryptVault(&vaultContainer, inputFileName, password, source)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("error decrypting file %s: %w", inputFileName, err)
-// 		}
-// 	} else {
-// 		// File is not encrypted, proceed with decoding
-// 		vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("failed to decode vault: %w", err)
-// 		}
-// 		var v v1.Vault
-// 		if err := proto.Unmarshal(vaultData, &v); err != nil {
-// 			return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
-// 		}
-// 		decryptedVault = &v
-// 	}
 
-// 	localStates := make(map[TssKeyType]tss.LocalState)
-// 	for _, keyshare := range decryptedVault.KeyShares {
-// 		var localState tss.LocalState
-// 		if err := json.Unmarshal([]byte(keyshare.Keyshare), &localState); err != nil {
-// 			return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
-// 		}
-// 		if keyshare.PublicKey == decryptedVault.PublicKeyEcdsa {
-// 			localStates[ECDSA] = localState
-// 		} else {
-// 			localStates[EdDSA] = localState
-// 		}
-// 	}
-// 	return localStates, nil
-// }
 
-// func readDataFileContent(inputFilePathName string) ([]byte, error) {
-// 	filePathName, err := filepath.Abs(inputFilePathName)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error getting absolute path for file %s: %w", inputFilePathName, err)
-// 	}
-// 	_, err = os.Stat(filePathName)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error reading file %s: %w", inputFilePathName, err)
-// 	}
-// 	fileContent, err := readFileContent(filePathName)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error reading file %s: %w", inputFilePathName, err)
-// 	}
-// 	buf, err := hex.DecodeString(string(fileContent))
-// 	if err == nil {
-// 		return buf, nil
-// 	}
-// 	fmt.Printf("Enter password to decrypt the vault(%s): ", inputFilePathName)
-// 	pwdBytes, err := term.ReadPassword(int(syscall.Stdin))
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to read password: %w", err)
-// 	}
-// 	password := string(pwdBytes)
-// 	decryptedVault, err := DecryptVault(password, fileContent)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error decrypting file %s: %w", inputFilePathName, err)
-// 	}
-// 	return hex.DecodeString(string(decryptedVault))
-// }
+func parseLocalState(content []byte) (map[TssKeyType]tss.LocalState, error) {
+		var vault v1.Vault
+		if err := proto.Unmarshal(content, &vault); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
+		}
 
-// // getTssSecretFile reads a file and returns the KeygenLocalState struct
-// func getLocalStateFromFile(file string) (map[TssKeyType]tss.LocalState, error) {
-// 	var voltixBackup struct {
-// 		Vault struct {
-// 			Keyshares []struct {
-// 				Pubkey   string `json:"pubkey"`
-// 				Keyshare string `json:"keyshare"`
-// 			} `json:"keyshares"`
-// 		} `json:"vault"`
-// 		Version string `json:"version"`
-// 	}
-// 	fileContent, err := readDataFileContent(file)
-// 	//fmt.Printf("fileContent %s\n", fileContent)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	err = json.Unmarshal(fileContent, &voltixBackup)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	localStates := make(map[TssKeyType]tss.LocalState)
-// 	for _, item := range voltixBackup.Vault.Keyshares {
-// 		var localState tss.LocalState
-// 		if err := json.Unmarshal([]byte(item.Keyshare), &localState); err != nil {
-// 			return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
-// 		}
-// 		if localState.ECDSALocalData.ShareID != nil {
-// 			localStates[ECDSA] = localState
-// 		}
-// 		if localState.EDDSALocalData.ShareID != nil {
-// 			localStates[EdDSA] = localState
-// 		}
-// 	}
-// 	return localStates, nil
-// }
+		localStates := make(map[TssKeyType]tss.LocalState)
+		for _, keyshare := range vault.KeyShares {
+				var localState tss.LocalState
+				if err := json.Unmarshal([]byte(keyshare.Keyshare), &localState); err != nil {
+						return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
+				}
+				if keyshare.PublicKey == vault.PublicKeyEcdsa {
+						localStates[ECDSA] = localState
+				} else {
+						localStates[EdDSA] = localState
+				}
+		}
 
-// type tempLocalState struct {
-// 	FileName   string
-// 	LocalState map[TssKeyType]tss.LocalState
-// }
+		return localStates, nil
+}
 
-// // Define an enum-like type for input source
-// type InputSource int
 
-// const (
-// 	CommandLine InputSource = iota
-// 	Web
-// )
 
 func ProcessFiles(files []string, passwords []string, source InputSource) (string, error) {
 	var outputBuilder strings.Builder
@@ -292,409 +202,6 @@ func RecoverAction(cCtx *cli.Context) error {
 	return nil
 }
 
-// func cosmosLikeKeyHandler(extendedPrivateKey *hdkeychain.ExtendedKey, bech32PrefixAcc string, bech32PrefixVal string, bech32PrefixNode string, outputBuilder *strings.Builder, coinName string) error {
-// 		fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for %s:%s\n", coinName, extendedPrivateKey.String())
-
-// 		nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 		if err != nil {
-// 				return err
-// 		}
-// 		nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 		if err != nil {
-// 				return err
-// 		}
-
-// 		fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-// 		fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for %s:%s\n", coinName, hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-
-// 		compressedPubkey := coskey.PubKey{
-// 				Key: nonHardenedPubKey.SerializeCompressed(),
-// 		}
-
-// 		// Generate the address bytes
-// 		addrBytes := types.AccAddress(compressedPubkey.Address().Bytes())
-
-// 		// Use sdk.Bech32ifyAccPub with the correct prefix
-// 		bech32Addr := sdk.MustBech32ifyAddressBytes(bech32PrefixAcc, addrBytes)
-
-// 		fmt.Fprintf(outputBuilder, "\naddress:%s\n", bech32Addr)
-// 		return nil
-// }
-
-// func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder *strings.Builder) error {
-// 	vssShares := make(vss.Shares, len(allSecrets))
-// 	for i, s := range allSecrets {
-// 		fmt.Fprintf(outputBuilder, "\n Public Key(ECDSA): %v\n", s.LocalState[ECDSA].PubKey)
-// 		share := vss.Share{
-// 			Threshold: threshold,
-// 			ID:        s.LocalState[ECDSA].ECDSALocalData.ShareID,
-// 			Share:     s.LocalState[ECDSA].ECDSALocalData.Xi,
-// 		}
-// 		vssShares[i] = &share
-// 	}
-
-// 	curve := binanceTss.S256()
-// 	tssPrivateKey, err := vssShares[:threshold].ReConstruct(curve)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
-// 	publicKey := privateKey.PubKey()
-
-// 	hexPubKey := hex.EncodeToString(publicKey.SerializeCompressed())
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(ECDSA): %s\n", hexPubKey)
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(ECDSA): %s\n", hex.EncodeToString(privateKey.Serialize()))
-
-// 	// Example for Bitcoin derivation
-// 	net := &chaincfg.MainNetParams
-// 	chaincode := allSecrets[0].LocalState[ECDSA].ChainCodeHex
-// 	fmt.Fprintf(outputBuilder, "\nchaincode: %s\n", chaincode)
-// 	chaincodeBuf, err := hex.DecodeString(chaincode)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincodeBuf, []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
-// 	fmt.Fprintf(outputBuilder, "\nextended private key full: %s\n", extendedPrivateKey.String())
-
-// 	supportedCoins := []struct {
-// 		name       string
-// 		derivePath string
-// 		action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
-// 	}{
-// 		{
-// 			name:       "bitcoin",
-// 			derivePath: "m/84'/0'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return showBitcoinKey(key, output)
-// 			},
-// 		},
-// 		{
-// 			name:       "bitcoinCash",
-// 			derivePath: "m/44'/145'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return showBitcoinCashKey(key, output)
-// 			},
-// 		},
-// 		{
-// 			name:       "dogecoin",
-// 			derivePath: "m/44'/3'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return showDogecoinKey(key, output)
-// 			},
-// 		},
-// 		{
-// 			name:       "litecoin",
-// 			derivePath: "m/84'/2'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return showLitecoinKey(key, output)
-// 			},
-// 		},
-// 		{
-// 			name:       "thorchain",
-// 			derivePath: "m/44'/931'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return cosmosLikeKeyHandler(key, "thor", "v", "c", output, "THORChain")
-// 			},
-// 		},
-// 		{
-// 			name:       "mayachain",
-// 			derivePath: "m/44'/931'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return cosmosLikeKeyHandler(key, "maya", "v", "c", output, "MayaChain")
-// 			},
-// 		},
-// 		{
-// 			name:       "atomchain",
-// 			derivePath: "m/44'/118'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return cosmosLikeKeyHandler(key, "cosmos", "valoper", "valcons", output, "ATOMChain")
-// 			},
-// 		},
-// 		{
-// 			name:       "kujirachain",
-// 			derivePath: "m/44'/118'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return cosmosLikeKeyHandler(key, "kujira", "valoper", "valcons", output, "KujiraChain")
-// 			},
-// 		},
-// 		{
-// 			name:       "dydxchain",
-// 			derivePath: "m/44'/118'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return cosmosLikeKeyHandler(key, "dydx", "valoper", "valcons", output, "DydxChain")
-// 			},
-// 		},
-// 		{
-// 			name:       "terraclassicchain",
-// 			derivePath: "m/44'/118'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return cosmosLikeKeyHandler(key, "terra", "valoper", "valcons", output, "terraclassicchain")
-// 			},
-// 		},
-// 		{
-// 			name:       "terrachain",
-// 			derivePath: "m/44'/118'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return cosmosLikeKeyHandler(key, "terra", "valoper", "valcons", output, "terrachain")
-// 			},
-// 		},
-// 		{
-// 			name:       "ethereum",
-// 			derivePath: "m/44'/60'/0'/0/0",
-// 			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-// 				return showEthereumKey(key, output)
-// 			},
-// 		},
-// 	}
-
-// 	// Ensure that we pass the correct key generation logic based on the coin type
-// 	for _, coin := range supportedCoins {
-// 		fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.name)
-// 		key, err := getDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
-// 		if err != nil {
-// 			return fmt.Errorf("error deriving private key for %s: %w", coin.name, err)
-// 		}
-// 		fmt.Fprintf(outputBuilder, "\nprivate key for %s: %s \n", coin.name, key.String())
-// 		if err := coin.action(key, outputBuilder); err != nil {
-// 			fmt.Println("error showing keys for", coin.name, "error:", err)
-// 		}
-// 	}
-
-// 	return nil
-// }
-
-// func processEdDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder *strings.Builder) error {
-// 	vssShares := make(vss.Shares, len(allSecrets))
-// 	for i, s := range allSecrets {
-// 		fmt.Fprintf(outputBuilder, "\n Public Key(EdDSA): %v\n", s.LocalState[EdDSA].PubKey)
-// 		share := vss.Share{
-// 			Threshold: threshold,
-// 			ID:        s.LocalState[EdDSA].EDDSALocalData.ShareID,
-// 			Share:     s.LocalState[EdDSA].EDDSALocalData.Xi,
-// 		}
-// 		vssShares[i] = &share
-// 	}
-
-// 	curve := binanceTss.Edwards()
-// 	tssPrivateKey, err := vssShares[:threshold].ReConstruct(curve)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
-// 	publicKey := privateKey.PubKey()
-
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(EdDSA): %s\n", hex.EncodeToString(publicKey.SerializeCompressed()))
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(EdDSA): %s\n", hex.EncodeToString(privateKey.Serialize()))
-
-
-// 	return nil
-// }
-
-// func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, outputBuilder *strings.Builder) error {
-// 	if len(allSecrets) == 0 {
-// 		return fmt.Errorf("no secrets provided")
-// 	}
-
-// 	switch keyType {
-// 	case ECDSA:
-// 		return processECDSAKeys(threshold, allSecrets, outputBuilder)
-// 	case EdDSA:
-// 		return processEdDSAKeys(threshold, allSecrets, outputBuilder)
-// 	default:
-// 		return fmt.Errorf("unsupported key type: %v", keyType)
-// 	}
-// }
-
-// func getDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
-// 	pathBuf, err := tss.GetDerivePathBytes(derivePath)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("get derive path bytes failed: %w", err)
-// 	}
-// 	key := rootPrivateKey
-// 	for _, item := range pathBuf {
-// 		key, err = key.Derive(item)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	return key, nil
-// }
-
-// func showEthereumKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-// 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for ethereum:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded private key for ethereum:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-// 	fmt.Fprintf(outputBuilder, "\nethereum address:%s\n", crypto.PubkeyToAddress(*nonHardenedPubKey.ToECDSA()).Hex())
-// 	return nil
-// }
-
-// func showBitcoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-// 	net := &chaincfg.MainNetParams
-// 	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for bitcoin:%s\n", extendedPrivateKey.String())
-// 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	wif, err := btcutil.NewWIF(nonHardenedPrivKey, net, true)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	addressPubKey, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for bitcoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-// 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-// 	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoin: p2wpkh:%s\n", wif.String())
-// 	return nil
-// }
-
-// func showBitcoinCashKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-// 	net := &bchChainCfg.MainNetParams
-// 	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for bitcoinCash:%s\n", extendedPrivateKey.String())
-// 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	bchNonHardenedPrivKey, _ := bchec.PrivKeyFromBytes(bchec.S256(), nonHardenedPrivKey.Serialize())
-// 	wif, err := bchutil.NewWIF(bchNonHardenedPrivKey, net, true)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	addressPubKey, err := bchutil.NewAddressPubKeyHash(bchutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for bitcoinCash:%s", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-// 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-// 	fmt.Fprintf(outputBuilder, "\nWIF private key for bitcoinCash: %s\n", wif.String())
-// 	return nil
-// }
-
-// func showDogecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-// 	net := &dogechaincfg.MainNetParams
-// 	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for dogecoin:%s\n", extendedPrivateKey.String())
-// 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	dogutilNonHardenedPrivKey, _ := dogec.PrivKeyFromBytes(dogec.S256(), nonHardenedPrivKey.Serialize())
-// 	wif, err := dogutil.NewWIF(dogutilNonHardenedPrivKey, net, true)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	addressPubKey, err := dogutil.NewAddressPubKeyHash(dogutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for dogecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-// 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-// 	fmt.Fprintf(outputBuilder, "\nWIF private key for dogecoin: %s\n", wif.String())
-// 	return nil
-// }
-
-// func showLitecoinKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-// 	net := &ltcchaincfg.MainNetParams
-// 	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for litcoin:%s", extendedPrivateKey.String())
-// 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	wif, err := ltcutil.NewWIF(nonHardenedPrivKey, net, true)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	addressPubKey, err := ltcutil.NewAddressWitnessPubKeyHash(ltcutil.Hash160(nonHardenedPubKey.SerializeCompressed()), net)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for litecoin:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-// 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addressPubKey.EncodeAddress())
-// 	fmt.Fprintf(outputBuilder, "\nWIF private key for litecoin: %s\n", wif.String())
-// 	return nil
-// }
-
-// func showThorchainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-
-// 	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for THORChain:%s\n", extendedPrivateKey.String())
-// 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for THORChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for THORChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-// 	config := sdk.GetConfig()
-// 	config.SetBech32PrefixForAccount("thor", "thorpub")
-// 	config.SetBech32PrefixForValidator("thorv", "thorvpub")
-// 	config.SetBech32PrefixForConsensusNode("thorc", "thorcpub")
-
-// 	compressedPubkey := coskey.PubKey{
-// 		Key: nonHardenedPubKey.SerializeCompressed(),
-// 	}
-// 	addr := types.AccAddress(compressedPubkey.Address().Bytes())
-// 	fmt.Fprintf(outputBuilder, "address:%s", addr.String())
-// 	return nil
-// }
-
-// func showMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-// 	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for MAYAChain:%s\n", extendedPrivateKey.String())
-// 	nonHardenedPubKey, err := extendedPrivateKey.ECPubKey()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened private key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
-// 	fmt.Fprintf(outputBuilder, "\nhex encoded non-hardened public key for MAYAChain:%s\n", hex.EncodeToString(nonHardenedPubKey.SerializeCompressed()))
-// 	config := sdk.GetConfig()
-// 	config.SetBech32PrefixForAccount("maya", "mayapub")
-// 	config.SetBech32PrefixForValidator("mayav", "mayavpub")
-// 	config.SetBech32PrefixForConsensusNode("mayac", "mayacpub")
-
-// 	compressedPubkey := coskey.PubKey{
-// 		Key: nonHardenedPubKey.SerializeCompressed(),
-// 	}
-// 	addr := types.AccAddress(compressedPubkey.Address().Bytes())
-// 	fmt.Fprintf(outputBuilder, "\naddress:%s\n", addr.String())
-// 	return nil
-// }
-
 func decryptFileAction(ctx *cli.Context) error {
 	for _, item := range ctx.Args().Slice() {
 		filePathName, err := filepath.Abs(item)
@@ -742,78 +249,3 @@ func decryptFileAction(ctx *cli.Context) error {
 	}
 	return nil
 }
-
-// func decryptVault(vaultContainer *v1.VaultContainer, inputFileName string, password string, source InputSource) (*v1.Vault, error) {
-// 	vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to decode vault: %w", err)
-// 	}
-
-// 	//If no password is provided, prompt for one
-// 	if vaultContainer.IsEncrypted && source == CommandLine {
-// 		if password == "" {
-// 			fmt.Printf("Enter password to decrypt the vault (%s): ", inputFileName)
-// 			bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-// 			if err != nil {
-// 				return nil, fmt.Errorf("failed to read password: %w", err)
-// 			}
-// 			password = string(bytePassword)
-// 		}
-// 	}
-
-// 	// Attempt to decrypt the vault using the provided or entered password
-// 	decryptedVaultData, err := DecryptVault(password, vaultData)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("error decrypting file %s: %w", inputFileName, err)
-// 	}
-
-// 	var vault v1.Vault
-// 	if err := proto.Unmarshal(decryptedVaultData, &vault); err != nil {
-// 		return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
-// 	}
-
-// 	return &vault, nil
-// }
-
-// func DecryptVault(password string, vault []byte) ([]byte, error) {
-// 	// Hash the password to create a key
-// 	hash := sha256.Sum256([]byte(password))
-// 	key := hash[:]
-
-// 	// Create a new AES cipher using the key
-// 	block, err := aes.NewCipher(key)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	// Use GCM (Galois/Counter Mode)
-// 	gcm, err := cipher.NewGCM(block)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	// Get the nonce size
-// 	nonceSize := gcm.NonceSize()
-// 	if len(vault) < nonceSize {
-// 		return nil, fmt.Errorf("ciphertext too short")
-// 	}
-
-// 	// Extract the nonce from the vault
-// 	nonce, ciphertext := vault[:nonceSize], vault[nonceSize:]
-
-// 	// Decrypt the vault
-// 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return plaintext, nil
-// }
-
-// func isBakFile(fileName string) bool {
-// 	return strings.HasSuffix(fileName, ".bak") || strings.HasSuffix(fileName, ".vult")
-// }
-
-// func readFileContent(fi string) ([]byte, error) {
-// 	return os.ReadFile(fi)
-// }

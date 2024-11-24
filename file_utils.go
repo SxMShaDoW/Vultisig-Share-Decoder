@@ -109,6 +109,73 @@ func getLocalStateFromBak(inputFileName string, password string, source InputSou
   return localStates, nil
 }
 
+func getLocalStateFromBakContent(content []byte, password string, source InputSource) (map[TssKeyType]tss.LocalState, error) {
+    rawContent, err := base64.StdEncoding.DecodeString(string(content))
+    if err != nil {
+        return nil, fmt.Errorf("error decoding content: %w", err)
+    }
+
+    var vaultContainer v1.VaultContainer
+    if err := proto.Unmarshal(rawContent, &vaultContainer); err != nil {
+        return nil, fmt.Errorf("error unmarshalling content: %w", err)
+    }
+
+    localStates := make(map[TssKeyType]tss.LocalState)
+    if vaultContainer.IsEncrypted {
+        localStates, err = decryptVaultContent(&vaultContainer, password, source)
+        if err != nil {
+            return nil, fmt.Errorf("error decrypting content: %w", err)
+        }
+    } else {
+        vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
+        if err != nil {
+            return nil, fmt.Errorf("failed to decode vault: %w", err)
+        }
+        var v v1.Vault
+        if err := proto.Unmarshal(vaultData, &v); err != nil {
+            return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
+        }
+        localStates, err = parseVault(&v)
+        if err != nil {
+            return nil, fmt.Errorf("failed to parse vault: %w", err)
+        }
+    }
+
+    return localStates, nil
+}
+
+func getLocalStateFromContent(content []byte) (map[TssKeyType]tss.LocalState, error) {
+    var voltixBackup struct {
+        Vault struct {
+            Keyshares []struct {
+                Pubkey   string `json:"pubkey"`
+                Keyshare string `json:"keyshare"`
+            } `json:"keyshares"`
+        } `json:"vault"`
+        Version string `json:"version"`
+    }
+
+    err := json.Unmarshal(content, &voltixBackup)
+    if err != nil {
+        return nil, err
+    }
+
+    localStates := make(map[TssKeyType]tss.LocalState)
+    for _, item := range voltixBackup.Vault.Keyshares {
+        var localState tss.LocalState
+        if err := json.Unmarshal([]byte(item.Keyshare), &localState); err != nil {
+            return nil, fmt.Errorf("error unmarshalling keyshare: %w", err)
+        }
+        if localState.ECDSALocalData.ShareID != nil {
+            localStates[ECDSA] = localState
+        }
+        if localState.EDDSALocalData.ShareID != nil {
+            localStates[EdDSA] = localState
+        }
+    }
+    return localStates, nil
+}
+
 func getLocalStateFromFile(file string) (map[TssKeyType]tss.LocalState, error) {
   var voltixBackup struct {
     Vault struct {

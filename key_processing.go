@@ -4,7 +4,7 @@ import (
     "encoding/hex"
     "fmt"
     "strings"
-
+    "log"
     "github.com/bnb-chain/tss-lib/v2/crypto/vss"
     binanceTss "github.com/bnb-chain/tss-lib/v2/tss"
     "github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -28,21 +28,57 @@ func getKeys(threshold int, allSecrets []tempLocalState, keyType TssKeyType, out
 }
 
 func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder *strings.Builder) error {
+    log.Printf("Processing ECDSA keys with threshold: %d, number of secrets: %d", threshold, len(allSecrets))
+
+    // Validate input parameters
+    if threshold <= 0 {
+        return fmt.Errorf("invalid threshold: %d", threshold)
+    }
+    if len(allSecrets) == 0 {
+        return fmt.Errorf("no secrets provided")
+    }
+    if threshold > len(allSecrets) {
+        return fmt.Errorf("threshold (%d) cannot be greater than number of secrets (%d)", threshold, len(allSecrets))
+    }
     vssShares := make(vss.Shares, len(allSecrets))
     for i, s := range allSecrets {
-        fmt.Fprintf(outputBuilder, "\n Public Key(ECDSA): %v\n", s.LocalState[ECDSA].PubKey)
+        // Check if LocalState exists
+        if s.LocalState == nil {
+            return fmt.Errorf("localState is nil for secret %d", i)
+        }
+        // Check if ECDSA key exists
+        localState, exists := s.LocalState[ECDSA]
+        if !exists {
+            return fmt.Errorf("ECDSA key not found in secret %d", i)
+        }
+        log.Printf("Secret %d - ShareID: %v, Xi: %v", i, 
+            localState.ECDSALocalData.ShareID != nil,
+            localState.ECDSALocalData.Xi != nil)
+        fmt.Fprintf(outputBuilder, "\n Public Key(ECDSA): %v\n", localState.PubKey)
+
+        // Validate ShareID and Xi
+        if localState.ECDSALocalData.ShareID == nil {
+            return fmt.Errorf("ShareID is nil for secret %d", i)
+        }
+        if localState.ECDSALocalData.Xi == nil {
+            return fmt.Errorf("Xi is nil for secret %d", i)
+        }
         share := vss.Share{
             Threshold: threshold,
-            ID:        s.LocalState[ECDSA].ECDSALocalData.ShareID,
-            Share:     s.LocalState[ECDSA].ECDSALocalData.Xi,
+            ID:        localState.ECDSALocalData.ShareID,
+            Share:     localState.ECDSALocalData.Xi,
         }
         vssShares[i] = &share
     }
-
+    log.Printf("Created %d vssShares", len(vssShares))
     curve := binanceTss.S256()
+    if curve == nil {
+        return fmt.Errorf("failed to get S256 curve")
+    }
+    log.Printf("Attempting to reconstruct with threshold %d from %d shares", threshold, len(vssShares))
     tssPrivateKey, err := vssShares[:threshold].ReConstruct(curve)
     if err != nil {
-        return err
+        return fmt.Errorf("failed to reconstruct private key: %w", err)
     }
     privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
     publicKey := privateKey.PubKey()
