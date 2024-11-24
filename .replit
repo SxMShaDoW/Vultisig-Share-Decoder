@@ -19,7 +19,7 @@ channel = "stable-24_05"
 requiredFiles = [".replit"]
 
 [deployment]
-build = "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o vultisigdecoder main.go server.go"
+build = "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o vultisigdecoder *.go"
 run = "./vultisigdecoder server"
 ignorePorts = false
 deploymentTarget = "cloudrun"
