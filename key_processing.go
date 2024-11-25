@@ -54,7 +54,7 @@ func processECDSAKeys(threshold int, allSecrets []tempLocalState, outputBuilder 
         log.Printf("Secret %d - ShareID: %v, Xi: %v", i, 
             localState.ECDSALocalData.ShareID != nil,
             localState.ECDSALocalData.Xi != nil)
-        fmt.Fprintf(outputBuilder, "\n Public Key(ECDSA): %v\n", localState.PubKey)
+        fmt.Fprintf(outputBuilder, "\nPublic Key(ECDSA): %v\n", localState.PubKey)
 
         // Validate ShareID and Xi
         if localState.ECDSALocalData.ShareID == nil {

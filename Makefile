@@ -1,4 +1,4 @@
-.PHONY: wasm cli backend clean all
+.PHONY: wasm cli wasm-logging backend clean all
 
 # Default target
 all: wasm cli backend

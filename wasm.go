@@ -6,30 +6,41 @@ package main
 import (
     "log"
     "syscall/js"
+    "os"
+    "io"
 )
 
 func main() {
-    // Set up logging to console for WASM
+    if os.Getenv("ENABLE_LOGGING") != "true" {
+        log.SetOutput(io.Discard)
+    }
     log.SetFlags(log.Lshortfile | log.LstdFlags)
     log.Println("Starting WASM application...")
 
     c := make(chan struct{}, 0)
 
-    // wasm.go modifications:
-
     js.Global().Set("ProcessFiles", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-        // Convert JS arrays to Go slices
-        fileData := make([][]byte, args[0].Length())
+        // args[0] = file contents
+        // args[1] = passwords
+        // args[2] = filenames
+        var fileInfos []FileInfo
         passwords := make([]string, args[1].Length())
 
-        // Convert file data
+        // Convert file data and create FileInfo objects
         for i := 0; i < args[0].Length(); i++ {
             jsArray := args[0].Index(i)
             data := make([]byte, jsArray.Length())
             for j := 0; j < jsArray.Length(); j++ {
                 data[j] = byte(jsArray.Index(j).Int())
             }
-            fileData[i] = data
+
+            // Get the actual filename from the third argument
+            filename := args[2].Index(i).String()
+
+            fileInfos = append(fileInfos, FileInfo{
+                Name:    filename,
+                Content: data,
+            })
         }
 
         // Convert passwords
@@ -38,7 +49,7 @@ func main() {
         }
 
         // Process the files with thresholds
-        result, err := ProcessFileContent(fileData, passwords, Web)
+        result, err := ProcessFileContent(fileInfos, passwords, Web)
         if err != nil {
             return err.Error()
         }

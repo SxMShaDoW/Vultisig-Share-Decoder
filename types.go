@@ -29,3 +29,8 @@ type tempLocalState struct {
     FileName   string
     LocalState map[TssKeyType]tss.LocalState
 }
+
+type FileInfo struct {
+    Name    string
+    Content []byte
+}

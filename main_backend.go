@@ -3,7 +3,9 @@
 
 package main
 
-import "main/backend"
+import (
+    "main/backend"
+)
 
 func main() {
     backend.StartServer()

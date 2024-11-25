@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"io"
 	"log"
 	"path/filepath"
 	"strings"
@@ -16,14 +17,17 @@ import (
 	"encoding/json"
 )
 
-// main.go modifications:
-
-func ProcessFileContent(fileData [][]byte, passwords []string, source InputSource) (string, error) {
+func ProcessFileContent(files []FileInfo, passwords []string, source InputSource) (string, error) {
 		var allSecrets []tempLocalState
+		var outputBuilder strings.Builder
+
+	if os.Getenv("ENABLE_LOGGING") != "true" {
+			log.SetOutput(io.Discard)
+	}
 
 		// Process each file
-		for i, data := range fileData {
-				contentStr := strings.TrimSpace(string(data))
+		for i, file := range files {
+			contentStr := strings.TrimSpace(string(file.Content))
 
 				log.Printf("Processing file %d, content starts with: %s", i, contentStr[:min(len(contentStr), 50)])
 
@@ -38,7 +42,7 @@ func ProcessFileContent(fileData [][]byte, passwords []string, source InputSourc
 				decodedData, err := base64.StdEncoding.DecodeString(contentStr)
 				if err != nil {
 						log.Printf("File %d is not base64 encoded, trying direct parsing", i)
-						decodedData = data
+						decodedData = file.Content
 				} else {
 						log.Printf("File %d successfully decoded from base64", i)
 				}
@@ -58,18 +62,22 @@ func ProcessFileContent(fileData [][]byte, passwords []string, source InputSourc
 						}
 				}
 
+				// Add share details to output
+				outputBuilder.WriteString(fmt.Sprintf("Backup name: %s\n", file.Name))
+				if eddsaState, ok := localStates[EdDSA]; ok {
+						outputBuilder.WriteString(fmt.Sprintf("This Share: %s\n", eddsaState.LocalPartyKey))
+						outputBuilder.WriteString(fmt.Sprintf("All Shares: %v\n", eddsaState.KeygenCommitteeKeys))
+				}
+
 				allSecrets = append(allSecrets, tempLocalState{
 						FileName:   fmt.Sprintf("file_%d", i),
 						LocalState: localStates,
 				})
 		}
 
-		// Use provided threshold or calculate default
 		threshold := len(allSecrets)
-
 		log.Printf("Using threshold %d for %d secrets", threshold, len(allSecrets))
 
-		var outputBuilder strings.Builder
 		if err := getKeys(threshold, allSecrets, ECDSA, &outputBuilder); err != nil {
 				return "", fmt.Errorf("error processing ECDSA keys: %w", err)
 		}

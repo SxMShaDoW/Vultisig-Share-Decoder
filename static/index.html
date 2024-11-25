@@ -1,273 +1,156 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Vault Key Recovery</title>
-    <style>
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            font-family: Arial, sans-serif;
-        }
-
-        .file-group {
-            margin-bottom: 15px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-
-        .add-file-btn {
-            margin: 10px 0;
-            padding: 5px 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .remove-file-btn {
-            margin-left: 10px;
-            padding: 2px 5px;
-            background-color: #f44336;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .results-section {
-            margin-top: 20px;
-        }
-
-        #recoverBtn {
-            padding: 10px 20px;
-            background-color: #2196F3;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .debug-section {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-        }
-
-        #debugOutput {
-            white-space: pre-wrap;
-            font-family: monospace;
-        }
-
-      /* Add spinner styles */
-      .loader-container {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100vw;
-          height: 100vh;
-          background: rgba(255, 255, 255, 0.95);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-      }
-      .loader {
-          border: 4px solid #f3f3f3;
-          border-top: 4px solid #3498db;
-          border-radius: 50%;
-          width: 40px;
-          height: 40px;
-          animation: spin 1s linear infinite;
-          margin: 0 auto;
-          margin-top: 20px;
-      }
-      .loader-message {
-          text-align: center;
-          font-family: Arial, sans-serif;
-          color: #333;
-          margin-bottom: 20px;
-      }
-      .loader-content {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-      }
-      @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-      }
-      /* Hide content while loading */
-      .content-container {
-          display: none;
-      }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vultisig Share Decoder</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="wasm_exec.js"></script>
+    <script src="main.js" defer></script>
 </head>
-  <body>
-    <!-- Update just the loader section of the HTML -->
+<body>
     <div id="loader" class="loader-container">
         <div class="loader-content">
-            <div class="loader-message">
-                Loading the server code in the browser...
-            </div>
+            <div class="loader-message">🚀 Firing up the rocket ship 🚀</div>
             <div class="loader"></div>
         </div>
     </div>
-    <!-- Wrap main content in container -->
+
     <div id="content" class="content-container">
-        <div class="container">
-            <h1>Vault Key Recovery</h1>
-            <div id="fileInputs">
+        <main class="container">
+            <h1>Vultisig Share Decoder</h1>
+
+            <section id="fileInputs" class="file-inputs">
+                <h3>Upload your vault shares</h3>
                 <div class="file-group" id="fileGroup0">
-                    <input type="file" accept=".bak,.vult" />
-                    <input type="password" placeholder="Password (optional)" />
-                    <button class="remove-file-btn" onclick="removeFileInput(0)">Remove</button>
+                    <div class="input-wrapper">
+                        <input type="file" accept=".bak,.vult" class="file-input" />
+                        <input type="password" placeholder="Password (optional)" class="password-input" />
+                    </div>
+                    <button class="btn remove-file-btn" onclick="removeFileInput(0)">
+                        <span class="btn-icon">×</span>
+                    </button>
                 </div>
+            </section>
+
+            <div class="actions">
+                <button class="btn add-file-btn" onclick="addFileInput()">
+                    <span class="btn-icon">+</span> Add Another File
+                </button>
+                <button class="btn primary-btn" id="recoverBtn" onclick="recoverKeys()">
+                    Recover Keys
+                </button>
             </div>
-            <button class="add-file-btn" onclick="addFileInput()">Add Another File Group</button>
-            <button id="recoverBtn" onclick="recoverKeys()">Recover Keys</button>
-            <div id="results" class="results-section"></div>
-            <div class="debug-section">
+            
+            <section id="results" class="results-section debug-section">
+            </section>
+
+            <section class="debug-section">
                 <h3>Debug Output</h3>
-                <div id="debugOutput"></div>
-            </div>
-        </div>
+                <pre id="debugOutput" class="debug-output"></pre>
+            </section>
+
+            <section class="results-section debug-section">
+                <h3>Support This Project</h3>
+                <p>If you find this tool helpful, please consider making a donation</p>
+                <div class="donation-addresses">
+                    <div class="address-item">
+                        <span class="currency">BTC:</span>
+                        <span class="address">bc1qed9kurz5045myzsm25gdq52tcntpaj8x8zlat2</span>
+                    </div>
+                    <div class="address-item">
+                        <span class="currency">ETH:</span>
+                        <span class="address">0x5D4892B1b76157ed0b209c065F9753a55795b257</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="results-section">             
+                <h3 class="toggle-header" onclick="toggleSection('usefulToolContent')">
+                    Why is this tool useful <span class="toggle-arrow">▼</span> </h3>
+                <div class="content" id="usefulToolContent"">
+                <p>It can provide you information about your backup without having to import it into the app. It can extract your private key information in case you need to migrate to a traditional wallet. </p>
+                    </div>
+            </section>
+            <section class="results-section">             
+                <h3 class="toggle-header" onclick="toggleSection('howTo')">
+                    How does the tool work? <span class="toggle-arrow">▼</span> </h3>
+                <div class="content" id="howTo"">
+                <p>You can upload your vault shares + password (optional). It will only extract the correct private key information if you provide more than half of the threshold files (2of2,2of3,4of6, etc).</p>
+                    </div>
+            </section>
+
+            <section class="results-section">
+                <h3 class="toggle-header" onclick="toggleSection('examples')">
+                    Some examples to test with <span class="toggle-arrow">▼</span> </h3>
+                <div class="content" id="examples"">
+                    <p>If you are looking for some examples on how to use it. You can find shares in the Github Repo to download. Just download them and upload it here.</p>
+                    <ul>
+                    <li> <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/Test-part1of2.vult">Test Vault 1/2 Share Android</a> </li>
+                    <li><a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/Test-part2of2.vult">Test Vault 2/2 Share iPhone</a> </li>
+                   <li> <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/honeypot.bak">JP's Honeypot</a>
+                    </li>
+                    </ul>
+                    <p> You can check the code (and run it locally) from <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/tree/main">Github</a> and see the code deployed from <a href="http://replit.com/@kersch/VultisigShareDecoder">Replit</a> </p>
+                    </div>
+            </section>
+
+            <section class="results-section" >
+                <h3 class="toggle-header" onclick="toggleSection('readResults')">
+                    How to read the results <span class="toggle-arrow">▼</span> </h3>
+                <div class="content" id="readResults"">
+                <ul>
+                    <li>The WIF private keys for Bitcoin-like networks can be imported into  tools such as Electrum.</li>
+                    <li>The private keys for Ethereum networks can be imported into tools such as Metamask.</li>
+                    <li>The private keys for Cosmos networks can be imported into tools such as Keplr.</li>
+                    <li>The private keys will only have your balance if you uploaded more than a 50% threshold (2of2,2of3,3of5,4of7,etc) of the shares.</li>
+                    <li>Remember: This should be a 1 time recovery situation as Vultisig features cannot protect you after you have imported your private key into another wallet.</li>
+                </ul>
+                </div>
+            </section>
+        </main>
+
+        
+
+        <footer class="footer">
+            <section class="footer-section">
+                <h2 class="toggle-header" onclick="toggleSection('disclaimerContent')">
+                    Disclaimer <span class="toggle-arrow">▼</span>
+                </h2>
+                <div class="content" id="disclaimerContent">
+                    <p>Use this tool and its data at your own risk. While we strive for accuracy, it is essential that you independently verify all transaction information.</p>
+                    <p>All information provided is on an "as is" basis, without any guarantees of completeness, accuracy, timeliness or results.</p>
+                    <p>This website is for informational purposes only and does not constitute financial, tax, or legal advice.</p>
+                </div>
+            </section>
+
+            <section class="footer-section">
+                <h2 class="toggle-header" onclick="toggleSection('legalContent')">
+                    Terms of Service and Privacy Policy <span class="toggle-arrow">▼</span>
+                </h2>
+                <div class="content" id="legalContent">
+                    <div class="legal-grid">
+                        <div class="legal-item">
+                            <h3>Terms of Service</h3>
+                            <ul>
+                                <li>Use this service responsibly</li>
+                                <li>For informational purposes only</li>
+                                <li>No illegal activities permitted</li>
+                            </ul>
+                        </div>
+                        <div class="legal-item">
+                            <h3>Privacy Policy</h3>
+                            <ul>
+                                <li>No data storage</li>
+                                <li>Can be downloaded for offline use</li>
+                                <li>No third-party data sharing</li>
+                                <li>Hosted on Replit infrastructure, so their privacy policy applies</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </footer>
     </div>
-
-    <script src="wasm_exec.js"></script>
-    <script>
-        let fileGroupCounter = 1;
-        function hideLoader() {
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('content').style.display = 'block';
-            debugLog("UI initialized and ready");
-        }
-        function debugLog(message) {
-            const debugOutput = document.getElementById('debugOutput');
-            const timestamp = new Date().toISOString();
-            debugOutput.innerHTML += `${timestamp}: ${message}\n`;
-        }
-        // Initialize WASM
-        const go = new Go();
-        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
-            .then((result) => {
-                go.run(result.instance);
-                debugLog("WASM initialized successfully");
-                hideLoader(); // Hide loader after WASM is initialized
-            })
-            .catch(err => {
-                debugLog(`WASM initialization error: ${err}`);
-                // Show error in loader
-                document.querySelector('.loader-container').innerHTML = 
-                    `<div style="color: red;">Error loading application: ${err}</div>`;
-            });
-
-      function addFileInput() {
-          const container = document.getElementById('fileInputs');
-          const groupDiv = document.createElement('div');
-          groupDiv.className = 'file-group';
-          groupDiv.id = `fileGroup${fileGroupCounter}`;
-          groupDiv.innerHTML = `
-              <input type="file" accept=".bak,.vult" />
-              <input type="password" placeholder="Password (optional)" />
-              <button class="remove-file-btn" onclick="removeFileInput(${fileGroupCounter})">Remove</button>
-          `;
-          container.appendChild(groupDiv);
-          fileGroupCounter++;
-          debugLog(`Added new file input group ${fileGroupCounter}`);
-      }
-
-        function removeFileInput(id) {
-            const element = document.getElementById(`fileGroup${id}`);
-            if (element) {
-                element.remove();
-                debugLog(`Removed file input group ${id}`);
-            }
-        }
-
-        async function readFileAsArrayBuffer(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const content = new Uint8Array(e.target.result);
-                    debugLog(`Read file ${file.name}: ${content.length} bytes`);
-                    resolve(content);
-                };
-                reader.onerror = (e) => {
-                    debugLog(`Error reading file ${file.name}: ${e}`);
-                    reject(e);
-                };
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-      async function recoverKeys() {
-          const fileGroups = document.querySelectorAll('.file-group');
-          const files = [];
-          const passwords = [];
-          const fileNames = new Set(); // Track unique file names
-
-          try {
-              // Collect all file data and passwords
-              for (let fileGroup of fileGroups) {
-                  const fileInput = fileGroup.querySelector('input[type="file"]');
-                  const passwordInput = fileGroup.querySelector('input[type="password"]');
-
-                  if (fileInput.files.length > 0) {
-                      const file = fileInput.files[0];
-
-                      // Check for duplicate files
-                      if (fileNames.has(file.name)) {
-                          throw new Error(`Duplicate file detected: ${file.name}. Please select different files.`);
-                      }
-                      fileNames.add(file.name);
-
-                      const fileData = await file.arrayBuffer();
-                      files.push(new Uint8Array(fileData));
-                      passwords.push(passwordInput.value || "");
-                  }
-              }
-
-              if (files.length === 0) {
-                  throw new Error("Please select at least one file to process.");
-              }
-
-              const result = window.ProcessFiles(files, passwords);
-              if (!result || result === "undefined") {
-                  throw new Error("No results were generated. Make sure you are using different shares.");
-              }
-
-              document.getElementById('results').innerText = result;
-
-          } catch (error) {
-              document.getElementById('results').innerText = `Error: ${error.message}`;
-              console.error(error); // For debugging purposes
-          }
-      }
-
-        function displayResults(result) {
-            const resultDiv = document.getElementById('results');
-            resultDiv.innerHTML = '';
-            
-            if (typeof result === 'string' && result.toLowerCase().includes('error')) {
-                resultDiv.innerHTML = `<div class="error">${result}</div>`;
-                debugLog(`Error in results: ${result}`);
-                return;
-            }
-
-            debugLog('Processing results for display');
-            
-            const pre = document.createElement('pre');
-            pre.style.whiteSpace = 'pre-wrap';
-            pre.style.wordBreak = 'break-all';
-            pre.textContent = result;
-            resultDiv.appendChild(pre);
-            debugLog('Results displayed successfully');
-        }
-    </script>
 </body>
 </html>
