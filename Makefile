@@ -1,22 +1,15 @@
-.PHONY: wasm cli backend clean all
+.PHONY: all cli wasm server clean
 
-# Default target
-all: wasm cli backend
+all: cli wasm server
 
-# Build WASM version
-wasm:
-	GOOS=js GOARCH=wasm go build -tags wasm -o static/main.wasm $$(ls *.go | grep -v '_cli.go\|_backend.go')
-
-# Build CLI version
 cli:
-	mkdir -p cli
-	go build -tags cli -o cli/cli-recover $$(ls *.go | grep -v 'wasm.go\|_backend.go')
+	go build -tags cli -o dist/cli ./cmd/cli 
 
-# Build and run backend
-backend:
-	go build -tags server -o webserver ./main_backend.go
-	chmod +x webserver
+wasm:
+	GOOS=js GOARCH=wasm go build -tags wasm -o static/main.wasm ./cmd/wasm
 
-# Clean built files
+server:
+	go build -tags server -o dist/webserver ./cmd/server
+
 clean:
-	rm -f static/main.wasm cli/cli-recover webserver
+	rm -f dist/* static/main.wasm
