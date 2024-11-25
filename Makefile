@@ -1,4 +1,4 @@
-.PHONY: wasm cli wasm-logging backend clean all
+.PHONY: wasm cli backend clean all
 
 # Default target
 all: wasm cli backend
@@ -14,8 +14,9 @@ cli:
 
 # Build and run backend
 backend:
-	go build -tags server -o backend ./main_backend.go
+	go build -tags server -o webserver ./main_backend.go
+	chmod +x webserver
 
 # Clean built files
 clean:
-	rm -f static/main.wasm cli/cli-recover backend
+	rm -f static/main.wasm cli/cli-recover webserver

@@ -10,7 +10,7 @@ You can (and should) run this locally.
 
 ### Running the GO Binary
 1. `git clone` or just download `cli/cli-recovery` binary
-2. Once downloaded, make sure it is executable such as `chmod +x main`
+2. Once downloaded, make sure it is executable such as `chmod +x cli/cli-recovery`
 3. Once its executable you can do the same CLI commands below. 
 `./cli/cli-recovery recover --files .... --files ...`
 
