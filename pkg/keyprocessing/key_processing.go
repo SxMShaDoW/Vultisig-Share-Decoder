@@ -5,13 +5,17 @@ import (
     "fmt"
     "strings"
     "log"
+    "encoding/json"
     "github.com/bnb-chain/tss-lib/v2/crypto/vss"
     binanceTss "github.com/bnb-chain/tss-lib/v2/tss"
     "github.com/btcsuite/btcd/btcutil/hdkeychain"
+    "github.com/btcsuite/btcutil/base58"
     "github.com/btcsuite/btcd/chaincfg"
     "github.com/decred/dcrd/dcrec/secp256k1/v4"
     "main/pkg/types"
     "main/pkg/keyhandlers"
+    edwards "github.com/decred/dcrd/dcrec/edwards/v2"
+
 )
 
 func GetKeys(threshold int, allSecrets []types.TempLocalState, keyType types.TssKeyType, outputBuilder *strings.Builder) error {
@@ -223,11 +227,26 @@ func ProcessEdDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBu
     if err != nil {
         return err
     }
-    privateKey := secp256k1.PrivKeyFromBytes(tssPrivateKey.Bytes())
-    publicKey := privateKey.PubKey()
+    
+    // Generate Ed25519 key pair
+    tssPrivateKeyScalar := tssPrivateKey.Bytes()
+    privateKey, publicKey, _ := edwards.PrivKeyFromScalar(tssPrivateKeyScalar)
+    publicKeyBytes := publicKey.Serialize()
+    privateKeyBytes := privateKey.Serialize()
 
-    fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(EdDSA): %s\n", hex.EncodeToString(publicKey.SerializeCompressed()))
-    fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(EdDSA): %s\n", hex.EncodeToString(privateKey.Serialize()))
+    eddsaPrivateKey := append(privateKeyBytes, publicKeyBytes...)
+
+    // // Convert to Base58 (useful for some wallets)
+    privateKeyBase58 := base58.Encode(eddsaPrivateKey)
+    addressBase58 := base58.Encode(publicKeyBytes)
+    jsonKey, _ := json.Marshal(hex.EncodeToString(eddsaPrivateKey))
+    
+    fmt.Fprintf(outputBuilder, "\naddress base58:%s\n", addressBase58)
+    fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(EdDSA): %s\n", hex.EncodeToString(publicKeyBytes))
+    fmt.Fprintf(outputBuilder, "\nhex encoded root privkey 32 bit(EdDSA): %s\n", hex.EncodeToString(privateKeyBytes))
+    fmt.Fprintf(outputBuilder, "\nhex encoded root privkey 64 bit(EdDSA): %s\n", hex.EncodeToString(eddsaPrivateKey))
+    fmt.Fprintf(outputBuilder, "\nhex encoded root privkey 64 bit base58(EdDSA): %s\n", privateKeyBase58) 
+    fmt.Fprintf(outputBuilder, "\njson key:%v\n", jsonKey)
 
     return nil
 }
