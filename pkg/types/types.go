@@ -1,7 +1,8 @@
 package types
 
 import (
-    "github.com/vultisig/mobile-tss-lib/tss"
+    //"github.com/vultisig/mobile-tss-lib/tss"
+    "main/tss"
 )
 
 // TssKeyType represents the type of TSS key

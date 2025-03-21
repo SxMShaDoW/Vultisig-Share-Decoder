@@ -9,7 +9,8 @@ import (
   "encoding/base64"
     "github.com/golang/protobuf/proto"
     v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
-    "github.com/vultisig/mobile-tss-lib/tss"
+    //"github.com/vultisig/mobile-tss-lib/tss"
+    "main/tss"
   "golang.org/x/term"
     "main/pkg/types"
 )

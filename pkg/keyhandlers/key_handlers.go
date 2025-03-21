@@ -20,7 +20,8 @@ import (
   "github.com/eager7/dogutil"
   "github.com/ltcsuite/ltcd/ltcutil"
   ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
-  "github.com/vultisig/mobile-tss-lib/tss"
+  //"github.com/vultisig/mobile-tss-lib/tss"
+  "main/tss"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
