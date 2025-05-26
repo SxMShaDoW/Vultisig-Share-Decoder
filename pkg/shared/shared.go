@@ -235,21 +235,14 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 	threshold := len(allSecret)
 	log.Printf("Using threshold %d for %d secrets", threshold, len(allSecret))
 
-	// Route to appropriate processing based on scheme
-	switch scheme {
-	case types.GG20:
-		// Process GG20 files
-
-		if err := keyprocessing.GetKeys(threshold, allSecret, types.ECDSA, &outputBuilder); err != nil {
-			return "", fmt.Errorf("error processing ECDSA keys: %w", err)
-		}
-		if err := keyprocessing.GetKeys(threshold, allSecret, types.EdDSA, &outputBuilder); err != nil {
-			return "", fmt.Errorf("error processing EdDSA keys: %w", err)
-		}
-		return outputBuilder.String(), nil
-	default:
-		return "", fmt.Errorf("unsupported scheme type: %s", scheme.String())
+	// Process GG20 files
+	if err := keyprocessing.GetKeys(threshold, allSecret, types.ECDSA, &outputBuilder); err != nil {
+		return "", fmt.Errorf("error processing ECDSA keys: %w", err)
 	}
+	if err := keyprocessing.GetKeys(threshold, allSecret, types.EdDSA, &outputBuilder); err != nil {
+		return "", fmt.Errorf("error processing EdDSA keys: %w", err)
+	}
+	return outputBuilder.String(), nil
 }
 
 // Helper function for min
