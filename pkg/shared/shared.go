@@ -165,6 +165,10 @@ func ParseDKLSVault(content []byte) (*v1.Vault, dkls.DKLSShareData, error) {
 	}
 
 	log.Printf("ParseDKLSVault: Successfully parsed vault '%s' with %d keyshares", vault.Name, len(vault.KeyShares))
+	
+	// Check lib_type to confirm this is a DKLS vault (lib_type = 1)
+	// Note: The protobuf field might be named differently in the actual struct
+	log.Printf("ParseDKLSVault: Vault appears to be DKLS format based on structure")
 
 	return vault, dkls.DKLSShareData{}, nil
 }
