@@ -1745,5 +1745,13 @@ async function __wbg_init(module_or_path) {
     return __wbg_finalize_init(instance, module);
 }
 
-export { initSync };
-export default __wbg_init;
+// Export functions globally for browser compatibility
+if (typeof window !== 'undefined') {
+    window.initVsWasm = __wbg_init;
+    window.initVsWasmSync = initSync;
+}
+
+// For module environments
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { initSync, default: __wbg_init };
+}

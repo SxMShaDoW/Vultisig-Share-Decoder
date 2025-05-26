@@ -24,31 +24,55 @@ const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.imp
     });
 
 // Initialize vs_wasm_bg.wasm (additional WASM module)
-const initVsWasm = fetch("vs_wasm_bg.wasm")
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`Failed to fetch vs_wasm_bg.wasm: ${response.statusText}`);
+const initVsWasm = new Promise((resolve, reject) => {
+    // Wait for vs_wasm.js to be fully loaded
+    const checkVsWasm = () => {
+        if (typeof window.initVsWasm === 'function') {
+            debugLog("Initializing vs_wasm module...");
+            window.initVsWasm()
+                .then((result) => {
+                    debugLog("vs_wasm initialized successfully");
+                    window.vsWasmInstance = result;
+                    resolve(result);
+                })
+                .catch((error) => {
+                    debugLog(`vs_wasm initialization failed: ${error}`);
+                    // Don't reject, just resolve with null to allow main app to continue
+                    resolve(null);
+                });
+        } else {
+            setTimeout(checkVsWasm, 100);
         }
-        return response.arrayBuffer();
-    })
-    .then(bytes => WebAssembly.instantiate(bytes))
-    .then((result) => {
-        debugLog("vs_wasm initialized successfully");
-        // Store the vs_wasm instance globally if needed
-        window.vsWasmInstance = result.instance;
-        return result;
-    });
+    };
+    checkVsWasm();
+});
 
 // Wait for both WASM modules to initialize
 Promise.all([initMainWasm, initVsWasm])
-    .then(() => {
-        debugLog("All WASM modules initialized successfully");
+    .then((results) => {
+        const [mainResult, vsResult] = results;
+        if (mainResult) {
+            debugLog("Main WASM module initialized successfully");
+        }
+        if (vsResult) {
+            debugLog("vs_wasm module initialized successfully");
+        } else {
+            debugLog("vs_wasm module failed to initialize - continuing without it");
+        }
+        debugLog("Application initialization complete");
         hideLoader();
     })
     .catch(err => {
         debugLog(`WASM initialization error: ${err}`);
-        document.querySelector('.loader-container').innerHTML = 
-            `<div style="color: var(--error-color);">Error loading application: ${err}</div>`;
+        // Try to continue with just the main WASM module
+        initMainWasm.then(() => {
+            debugLog("Continuing with main WASM only");
+            hideLoader();
+        }).catch(mainErr => {
+            debugLog(`Critical error - main WASM failed: ${mainErr}`);
+            document.querySelector('.loader-container').innerHTML = 
+                `<div style="color: var(--error-color);">Error loading application: ${mainErr}</div>`;
+        });
     });
 
 function addFileInput() {
