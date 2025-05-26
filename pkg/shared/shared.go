@@ -154,7 +154,12 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 	if scheme == types.DKLS {
 		// Process DKLS files
 		threshold := len(fileInfos) // For DKLS, typically use all shares
-		return ProcessDKLSFilesAndGetResult(fileInfos, &outputBuilder, threshold)
+		fmt.Fprintf(&outputBuilder, "Processing %d DKLS files with threshold %d\n\n", len(fileInfos), threshold)
+		err := ProcessDKLSFiles(fileInfos, &outputBuilder, threshold)
+		if err != nil {
+			return "", fmt.Errorf("error processing DKLS files: %w", err)
+		}
+		return outputBuilder.String(), nil
 	}
 
 	// Handle GG20 format (original logic)

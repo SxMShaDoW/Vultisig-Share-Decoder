@@ -88,3 +88,46 @@ func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []
 
 	return nil
 }
+package keyprocessing
+
+import (
+	"fmt"
+	"strings"
+	"log"
+	"main/pkg/dkls"
+)
+
+// ProcessDKLSKeys processes DKLS key shares to reconstruct private keys
+func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []string, outputBuilder *strings.Builder) error {
+	log.Printf("Processing DKLS keys with threshold: %d, number of shares: %d", threshold, len(dklsShares))
+
+	// Validate input parameters
+	if threshold <= 0 {
+		return fmt.Errorf("invalid threshold: %d", threshold)
+	}
+	if len(dklsShares) == 0 {
+		return fmt.Errorf("no DKLS shares provided")
+	}
+	if threshold > len(dklsShares) {
+		return fmt.Errorf("threshold (%d) cannot be greater than number of shares (%d)", threshold, len(dklsShares))
+	}
+
+	fmt.Fprintf(outputBuilder, "=== DKLS Key Reconstruction ===\n")
+	fmt.Fprintf(outputBuilder, "Using %d out of %d shares for reconstruction\n\n", threshold, len(dklsShares))
+
+	// For now, just display the share information since actual DKLS reconstruction
+	// would require the mobile-tss-lib DKLS implementation
+	for i, share := range dklsShares {
+		fmt.Fprintf(outputBuilder, "DKLS Share %d:\n", i+1)
+		fmt.Fprintf(outputBuilder, "  Party ID: %s\n", share.PartyID)
+		fmt.Fprintf(outputBuilder, "  Share ID: %s\n", share.ID)
+		fmt.Fprintf(outputBuilder, "  Share Data Length: %d bytes\n", len(share.ShareData))
+		fmt.Fprintf(outputBuilder, "\n")
+	}
+
+	fmt.Fprintf(outputBuilder, "Note: DKLS key reconstruction requires the full mobile-tss-lib implementation.\n")
+	fmt.Fprintf(outputBuilder, "This tool currently displays share information for DKLS vaults.\n")
+	fmt.Fprintf(outputBuilder, "For actual key reconstruction, please use the official Vultisig mobile app.\n")
+
+	return nil
+}

@@ -1,5 +1,18 @@
-
 package dkls
+
+// DKLSShare represents a DKLS threshold signature share
+type DKLSShare struct {
+	PartyID   string `json:"party_id"`
+	ShareData []byte `json:"share_data"`
+	PublicKey string `json:"public_key"`
+}
+
+// DKLSShareData represents the data structure for DKLS shares
+type DKLSShareData struct {
+	ID        string `json:"id"`
+	PartyID   string `json:"party_id"`
+	ShareData []byte `json:"share_data"`
+}
 
 import (
     "main/pkg/types"
