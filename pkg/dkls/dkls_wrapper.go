@@ -123,32 +123,81 @@ const path = require('path');
 // Load the WASM module
 async function runDKLS() {
     try {
-        // Import the WASM wrapper
-        const wasmPath = path.resolve('%s');
-        const wasmBinary = fs.readFileSync('%s');
+        // Import the WASM wrapper - using dynamic import for ES modules
+        const wasmModule = await import('file://' + path.resolve('%s'));
+        const init = wasmModule.default;
+        const { KeyExportSession, Keyshare } = wasmModule;
         
-        // This would need to be adapted based on how the WASM module is loaded
-        // For now, return a placeholder result
+        // Initialize WASM with the binary file
+        await init('file://' + path.resolve('%s'));
+        
         const request = %s;
         
-        console.log(JSON.stringify({
-            privateKey: "placeholder_private_key_from_wasm",
-            publicKey: "placeholder_public_key_from_wasm", 
-            success: true,
-            error: ""
-        }));
+        // Convert shares to the format expected by WASM
+        let reconstructedKey = null;
+        let publicKey = null;
+        
+        if (request.shares && request.shares.length >= request.threshold) {
+            try {
+                // Take first share and create session
+                const firstShare = request.shares[0];
+                const partyIds = request.partyIds.join(',');
+                
+                // Create key export session
+                const session = KeyExportSession.new(firstShare.shareData, partyIds);
+                
+                // Get setup message (if needed for multi-party protocol)
+                const setupMsg = session.getsetup();
+                
+                // For single-party reconstruction, directly finish
+                const privateKeyBytes = session.finish();
+                reconstructedKey = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                // Try to get public key from share
+                try {
+                    const keyshare = Keyshare.fromBytes(Buffer.from(firstShare.shareData, 'hex'));
+                    const pubKeyBytes = keyshare.publicKey();
+                    publicKey = Array.from(pubKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                } catch (pubKeyError) {
+                    console.error('Could not extract public key:', pubKeyError.message);
+                    publicKey = "unavailable";
+                }
+                
+                console.log(JSON.stringify({
+                    privateKey: reconstructedKey,
+                    publicKey: publicKey,
+                    success: true,
+                    error: ""
+                }));
+                
+            } catch (reconstructError) {
+                console.log(JSON.stringify({
+                    privateKey: "",
+                    publicKey: "",
+                    success: false,
+                    error: "DKLS reconstruction failed: " + reconstructError.message
+                }));
+            }
+        } else {
+            console.log(JSON.stringify({
+                privateKey: "",
+                publicKey: "",
+                success: false,
+                error: "Insufficient shares for reconstruction"
+            }));
+        }
         
     } catch (error) {
         console.log(JSON.stringify({
             privateKey: "",
             publicKey: "",
             success: false,
-            error: error.message
+            error: "WASM initialization failed: " + error.message
         }));
     }
 }
 
-runDKLS();
+runDKLS().catch(console.error);
 `, w.jsPath, w.wasmPath, string(requestJSON))
 
     return script

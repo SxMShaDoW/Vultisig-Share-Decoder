@@ -3,6 +3,7 @@ package keyprocessing
 import (
 	"fmt"
 	"strings"
+	"os/exec"
 	"main/pkg/dkls"
 )
 
@@ -48,8 +49,8 @@ func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []
 	if err := dklsWrapper.Initialize(); err != nil {
 		fmt.Fprintf(outputBuilder, "\nWASM Library Status: Not available (%v)\n", err)
 		fmt.Fprintf(outputBuilder, "\nTo enable full DKLS key reconstruction:\n")
-		fmt.Fprintf(outputBuilder, "1. Download vs_wasm_bg.wasm from: https://github.com/vultisig/vultisig-windows/blob/main/lib/dkls/vs_wasm_bg.wasm\n")
-		fmt.Fprintf(outputBuilder, "2. Place it in the static/ directory\n")
+		fmt.Fprintf(outputBuilder, "1. Replace static/vs_wasm.js with the actual file from GitHub\n")
+		fmt.Fprintf(outputBuilder, "2. Ensure vs_wasm_bg.wasm is in the static/ directory\n")
 		fmt.Fprintf(outputBuilder, "3. Ensure Node.js is installed for WASM execution\n")
 		fmt.Fprintf(outputBuilder, "\nCurrently displaying share information only.\n")
 		return nil
@@ -57,16 +58,30 @@ func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []
 
 	// Attempt actual key reconstruction
 	fmt.Fprintf(outputBuilder, "WASM Library Status: Available\n")
+	
+	// Check if Node.js is available
+	if _, err := exec.LookPath("node"); err != nil {
+		fmt.Fprintf(outputBuilder, "Node.js not found. Please install Node.js to enable DKLS reconstruction.\n")
+		return nil
+	}
+	
 	response, err := dklsWrapper.ExportKey(dklsShares, partyIDs, threshold)
 	if err != nil {
 		fmt.Fprintf(outputBuilder, "Key reconstruction failed: %v\n", err)
+		fmt.Fprintf(outputBuilder, "\nThis may be due to:\n")
+		fmt.Fprintf(outputBuilder, "- WASM library not properly loaded\n")
+		fmt.Fprintf(outputBuilder, "- Incompatible share format\n")
+		fmt.Fprintf(outputBuilder, "- Missing Node.js dependencies\n")
 		return nil
 	}
 
 	if response.Success {
 		fmt.Fprintf(outputBuilder, "\n=== DKLS Key Reconstruction Successful! ===\n")
-		fmt.Fprintf(outputBuilder, "Private Key: %x\n", response.PrivateKey)
-		fmt.Fprintf(outputBuilder, "Public Key: %x\n", response.PublicKey)
+		fmt.Fprintf(outputBuilder, "Private Key: %s\n", response.PrivateKey)
+		fmt.Fprintf(outputBuilder, "Public Key: %s\n", response.PublicKey)
+		
+		// TODO: Add cryptocurrency-specific key derivation here
+		fmt.Fprintf(outputBuilder, "\nNote: Cryptocurrency-specific derivation not yet implemented for DKLS.\n")
 	} else {
 		fmt.Fprintf(outputBuilder, "Key reconstruction failed: %s\n", response.Error)
 	}
