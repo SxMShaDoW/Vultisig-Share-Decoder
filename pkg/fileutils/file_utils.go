@@ -26,8 +26,8 @@ func IsBakFile(fileName string) bool {
   return strings.HasSuffix(fileName, ".bak") || strings.HasSuffix(fileName, ".vult")
 }
 
-// ParseVault attempts to parse vault content, handling both GG20 and DKLS formats
-func ParseVault(content []byte) (*v1.Vault, error) {
+// ParseVaultToProto attempts to parse vault content as protobuf, handling both GG20 and DKLS formats
+func ParseVaultToProto(content []byte) (*v1.Vault, error) {
 	// Try direct protobuf unmarshaling first
 	vault := &v1.Vault{}
 	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
