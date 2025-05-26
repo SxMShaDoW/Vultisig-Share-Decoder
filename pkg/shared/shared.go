@@ -42,20 +42,22 @@ func DetectSchemeType(content []byte) types.SchemeType {
 	// Try to decode as protobuf Vault
 	vault := &v1.Vault{}
 	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
-		// Use LibType field to definitively identify scheme
-		log.Printf("Vault LibType: %v", vault.LibType)
+		log.Printf("Vault Name: %s", vault.Name)
 		
-		// Check LibType - DKLS should have a specific LibType value
-		// Based on the protobuf, this references vultisig.keygen.v1.LibType
-		if vault.LibType == 1 { // Assuming 1 = DKLS, 0 = GG20
-			log.Printf("Detected DKLS scheme based on LibType field")
-			return types.DKLS
-		}
-		
-		// Fallback: Check if it has the reshare_prefix field (DKLS specific)
+		// Check if it has the reshare_prefix field (DKLS specific)
 		if vault.ResharePrefix != "" {
 			log.Printf("Detected DKLS scheme based on reshare_prefix field")
 			return types.DKLS
+		}
+		
+		// Check for DKLS by examining keyshare format
+		if len(vault.KeyShares) > 0 {
+			// DKLS keyshares are typically not valid JSON
+			keyshare := vault.KeyShares[0].Keyshare
+			if !isJSONString(keyshare) {
+				log.Printf("Detected DKLS scheme based on non-JSON keyshare format")
+				return types.DKLS
+			}
 		}
 		
 		log.Printf("Detected GG20 scheme")
