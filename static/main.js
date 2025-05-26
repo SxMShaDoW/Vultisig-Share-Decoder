@@ -24,35 +24,38 @@ const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.imp
     });
 
 // Initialize vs_wasm_bg.wasm (additional WASM module)
-const initVsWasm = fetch('./vs_wasm_bg.wasm')
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`Failed to fetch vs_wasm_bg.wasm: ${response.status} ${response.statusText}`);
-        }
-        debugLog(`vs_wasm_bg.wasm fetched successfully, size: ${response.headers.get('content-length')} bytes`);
-        return response.arrayBuffer();
-    })
-    .then(bytes => {
-        debugLog(`vs_wasm_bg.wasm loaded, size: ${bytes.byteLength} bytes`);
-        if (bytes.byteLength === 0) {
-            throw new Error('vs_wasm_bg.wasm file is empty');
-        }
-        return import('./vs_wasm.js');
-    })
-    .then(async (vsWasmModule) => {
-        debugLog("vs_wasm module loaded, initializing...");
-        const result = await vsWasmModule.default('./vs_wasm_bg.wasm');
+const initVsWasm = (async () => {
+    try {
+        // Create a script tag to load the module as ES6 module
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.textContent = `
+            import init, { Keyshare, KeyExportSession } from './vs_wasm.js';
+            
+            window.vsWasmInit = init;
+            window.vsWasmClasses = { Keyshare, KeyExportSession };
+        `;
+        document.head.appendChild(script);
+        
+        // Wait for the script to load
+        await new Promise((resolve, reject) => {
+            script.onload = resolve;
+            script.onerror = reject;
+            setTimeout(reject, 5000); // 5 second timeout
+        });
+        
+        // Initialize the WASM module
+        await window.vsWasmInit('./vs_wasm_bg.wasm');
         debugLog("vs_wasm initialized successfully");
-        window.vsWasmModule = vsWasmModule;
-        window.vsWasmInstance = result;
-        return result;
-    })
-    .catch((error) => {
+        
+        window.vsWasmModule = window.vsWasmClasses;
+        return window.vsWasmClasses;
+    } catch (error) {
         debugLog(`vs_wasm initialization failed: ${error.message}`);
         debugLog("Note: vs_wasm is optional for DKLS processing");
-        // Don't reject, just resolve with null to allow main app to continue
         return null;
-    });
+    }
+})();
 
 // Wait for both WASM modules to initialize
 Promise.all([initMainWasm, initVsWasm])
@@ -461,35 +464,19 @@ function parseProtobufVault(bytes) {
                             vault.publicKeyEddsa = stringValue;
                             debugLog(`Found EdDSA public key: ${stringValue.substring(0, 20)}...`);
                         }
-                    } else if (fieldData.length > 100) {
-                        // Large binary data - likely keyshare
-                        // Check if this is hex-encoded data
-                        const dataStr = new TextDecoder().decode(fieldData);
-                        if (/^[0-9a-fA-F]+$/.test(dataStr.trim()) && dataStr.length > 200) {
-                            // This looks like hex-encoded keyshare data
-                            vault.keyshares.push({
-                                publicKey: vault.publicKeyEcdsa,
-                                keyshare: fieldData  // Keep as bytes, will decode later
-                            });
-                            debugLog(`Found hex-encoded keyshare data: ${fieldData.length} bytes`);
-                        } else {
-                            // Regular binary keyshare data
-                            vault.keyshares.push({
-                                publicKey: vault.publicKeyEcdsa,
-                                keyshare: fieldData
-                            });
-                            debugLog(`Found binary keyshare data: ${fieldData.length} bytes`);
-                        }
                     }
                 } catch (e) {
-                    // Not a string, might be binary keyshare data
-                    if (fieldData.length > 100) {
-                        vault.keyshares.push({
-                            publicKey: vault.publicKeyEcdsa,
-                            keyshare: fieldData
-                        });
-                        debugLog(`Found binary keyshare data: ${fieldData.length} bytes`);
-                    }
+                    // Decoding failed, this might be binary data
+                }
+                
+                // Check for keyshare data - large binary chunks
+                if (fieldData.length > 1000) {
+                    // This is likely keyshare data - store as raw binary
+                    vault.keyshares.push({
+                        publicKey: vault.publicKeyEcdsa || 'unknown',
+                        keyshare: fieldData
+                    });
+                    debugLog(`Found binary keyshare data: ${fieldData.length} bytes`);
                 }
                 
                 offset += length.value;
@@ -657,122 +644,58 @@ Share ${i + 1} (${fileNames[i]}):
 
         // Try to use the vs_wasm module for key reconstruction
         try {
+            if (!window.vsWasmModule || !window.vsWasmModule.Keyshare) {
+                throw new Error("WASM module classes not available");
+            }
+            
             const { KeyExportSession, Keyshare } = window.vsWasmModule;
             
             // Get the first share with keyshare data
-            const firstShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
-            if (!firstShare) {
+            const validShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
+            if (!validShare) {
                 throw new Error("No valid keyshare data found");
             }
             
-            debugLog(`Attempting to create Keyshare from ${firstShare.keyshareData.length} bytes`);
+            debugLog(`Attempting to create Keyshare from ${validShare.keyshareData.length} bytes`);
             
-            // Convert keyshare data to proper format for vs_wasm
-            let keyshareBytes;
+            // Try different approaches to decode the keyshare data
+            let keyshareBytes = null;
             
-            // The keyshare data appears to be hex-encoded strings based on the preview
-            // Let's try to decode it properly
+            // Approach 1: Try direct binary data (skip protobuf headers)
             try {
-                const keyshareStr = new TextDecoder().decode(firstShare.keyshareData);
-                debugLog(`Keyshare as string: ${keyshareStr.substring(0, 100)}...`);
+                // Look for the actual keyshare data by skipping protobuf field headers
+                let offset = 0;
+                const data = validShare.keyshareData;
                 
-                // Check if it's hex-encoded (which seems to be the case based on preview)
-                if (/^[0-9a-fA-F]+$/.test(keyshareStr.trim())) {
-                    // It's hex-encoded, decode it to bytes
-                    const hexStr = keyshareStr.trim();
-                    keyshareBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                    debugLog(`Decoded hex keyshare to ${keyshareBytes.length} bytes`);
-                } else {
-                    // Not hex, try as raw binary data
-                    keyshareBytes = firstShare.keyshareData;
-                    debugLog(`Using raw keyshare data: ${keyshareBytes.length} bytes`);
+                // Skip protobuf headers and find the largest data chunk
+                while (offset < data.length - 100) {
+                    const fieldHeader = data[offset];
+                    const wireType = fieldHeader & 0x07;
+                    
+                    if (wireType === 2) { // Length-delimited
+                        offset++;
+                        const lengthResult = readVarint(data, offset);
+                        offset += getVarintLength(data, offset);
+                        
+                        if (lengthResult.value > 1000 && lengthResult.value < data.length && offset + lengthResult.value <= data.length) {
+                            // This might be the actual keyshare data
+                            keyshareBytes = data.slice(offset, offset + lengthResult.value);
+                            debugLog(`Found potential keyshare at offset ${offset}, length ${lengthResult.value}`);
+                            break;
+                        }
+                        offset += lengthResult.value;
+                    } else {
+                        offset++;
+                    }
                 }
-            } catch (e) {
-                debugLog(`Text decoding failed: ${e.message}, using raw data`);
-                // Use raw data if text decoding fails
-                keyshareBytes = firstShare.keyshareData;
-            }
-            
-            // Try to create a keyshare object from the processed data
-            const keyshare = Keyshare.fromBytes(keyshareBytes);
-            
-            // Create key export session
-            const session = KeyExportSession.new(keyshare, partyIds);
-            
-            // Get the setup message
-            const setupMsg = session.setup;
-            debugLog(`DKLS setup message created, length: ${setupMsg.length}`);
-            
-            // For single-party reconstruction, directly finish
-            const privateKeyBytes = session.finish();
-            const privateKey = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-            
-            // Get public key from keyshare
-            const publicKeyBytes = keyshare.publicKey();
-            const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-            
-            result = `=== DKLS Key Reconstruction Successful! ===
-
-Private Key: ${privateKey}
-Public Key: ${publicKey}
-
-${result}
-
-Note: DKLS key reconstruction completed using WASM library.
-`;
-            
-        } catch (wasmError) {
-            debugLog(`WASM processing error: ${wasmError}`);
-            
-            // Try alternative approach with base64 decoding
-            try {
-                debugLog("Trying alternative keyshare processing...");
-                const firstShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
                 
-                // Try base64 decoding the keyshare data
-                const keyshareStr = new TextDecoder().decode(firstShare.keyshareData);
-                const base64Decoded = new Uint8Array(atob(keyshareStr).split('').map(c => c.charCodeAt(0)));
-                
-                const { Keyshare } = window.vsWasmModule;
-                const keyshare = Keyshare.fromBytes(base64Decoded);
-                
-                debugLog("Alternative processing successful!");
-                
-                // Get public key from keyshare
-                const publicKeyBytes = keyshare.publicKey();
-                const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-                
-                result = `=== DKLS Key Information (Partial) ===
-
-Public Key: ${publicKey}
-
-${result}
-
-Note: Could not complete full key reconstruction, but extracted public key.
-`;
-                
-            } catch (altError) {
-                debugLog(`Alternative processing also failed: ${altError}`);
-                
-                // Try one more approach: direct hex decoding
-                try {
-                    debugLog("Trying direct hex decoding approach...");
-                    const firstShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
-                    
-                    // Convert to string and try direct hex decode
-                    const keyshareStr = new TextDecoder().decode(firstShare.keyshareData);
-                    const hexDecoded = new Uint8Array(keyshareStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                    
-                    debugLog(`Direct hex decode: ${hexDecoded.length} bytes from ${keyshareStr.length} hex chars`);
-                    
-                    const { Keyshare } = window.vsWasmModule;
-                    const keyshare = Keyshare.fromBytes(hexDecoded);
+                if (keyshareBytes) {
+                    const keyshare = Keyshare.fromBytes(keyshareBytes);
+                    debugLog("Successfully created keyshare from extracted binary data");
                     
                     // Get public key from keyshare
                     const publicKeyBytes = keyshare.publicKey();
                     const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-                    
-                    debugLog("Direct hex decoding successful!");
                     
                     result = `=== DKLS Key Information (Partial) ===
 
@@ -780,21 +703,60 @@ Public Key: ${publicKey}
 
 ${result}
 
-Note: Successfully extracted public key using direct hex decoding.
+Note: Successfully extracted public key from DKLS keyshare data.
 `;
+                    
+                } else {
+                    throw new Error("Could not find valid keyshare data in protobuf structure");
+                }
+                
+            } catch (binaryError) {
+                debugLog(`Binary extraction failed: ${binaryError.message}`);
+                
+                // Approach 2: Try as hex-encoded string
+                try {
+                    const keyshareStr = new TextDecoder().decode(validShare.keyshareData);
+                    if (/^[0-9a-fA-F\s]+$/.test(keyshareStr.trim())) {
+                        const hexStr = keyshareStr.replace(/\s/g, '').trim();
+                        keyshareBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                        debugLog(`Trying hex decode: ${keyshareBytes.length} bytes`);
+                        
+                        const keyshare = Keyshare.fromBytes(keyshareBytes);
+                        const publicKeyBytes = keyshare.publicKey();
+                        const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                        
+                        result = `=== DKLS Key Information (Hex Decoded) ===
+
+Public Key: ${publicKey}
+
+${result}
+
+Note: Successfully extracted public key using hex decoding.
+`;
+                        
+                    } else {
+                        throw new Error("Data is not valid hex format");
+                    }
                     
                 } catch (hexError) {
-                    debugLog(`Direct hex decoding also failed: ${hexError}`);
-                    
-                    result += `
-
-Error: ${wasmError}
-
-Note: Key reconstruction failed. The keyshare data appears to be in an unsupported format.
-Debug info: First share preview shows hex data: ${Array.from(firstShare.keyshareData.slice(0, 32)).map(b => String.fromCharCode(b)).join('')}
-`;
+                    debugLog(`Hex decoding failed: ${hexError.message}`);
+                    throw new Error(`All keyshare decoding methods failed: ${binaryError.message}, ${hexError.message}`);
                 }
             }
+            
+        } catch (wasmError) {
+            debugLog(`WASM processing error: ${wasmError.message}`);
+            
+            result += `
+
+Error: ${wasmError.message}
+
+Note: DKLS key reconstruction failed. The keyshare data format may not be compatible with the current WASM library version.
+
+Debugging Information:
+- Keyshare data length: ${dklsShares[0]?.keyshareData?.length || 'N/A'} bytes
+- Data preview: ${dklsShares[0]?.keyshareData ? Array.from(dklsShares[0].keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ') : 'N/A'}
+`;
         }
         
         displayResults(result);
