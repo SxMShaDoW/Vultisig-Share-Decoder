@@ -1,8 +1,4 @@
 
-<file_path>pkg/dkls/dkls_native.go</file_path>
-<change_summary>Add native Go DKLS reconstruction</change_summary>
-
-```go
 package dkls
 
 import (
@@ -196,4 +192,3 @@ func ProcessDKLSSharesNative(shares []DKLSShareData, partyIDs []string, threshol
 
 	return nil
 }
-```
