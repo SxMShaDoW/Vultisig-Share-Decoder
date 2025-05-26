@@ -23,6 +23,12 @@ func GetKeys(threshold int, allSecrets []types.TempLocalState, keyType types.Tss
         return fmt.Errorf("no secrets provided")
     }
 
+    // Check if we're dealing with DKLS scheme
+    if len(allSecrets) > 0 && allSecrets[0].SchemeType == types.DKLS {
+        return fmt.Errorf("DKLS scheme should use ProcessDKLSKeys function, not GetKeys")
+    }
+
+    // Handle GG20 scheme (original logic)
     switch keyType {
     case types.ECDSA:
         return ProcessECDSAKeys(threshold, allSecrets, outputBuilder)
