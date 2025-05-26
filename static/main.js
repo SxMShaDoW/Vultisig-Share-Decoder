@@ -26,25 +26,17 @@ const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.imp
 // Initialize vs_wasm_bg.wasm (additional WASM module)
 const initVsWasm = (async () => {
     try {
-        // Wait for the vs_wasm script to be available
-        let attempts = 0;
-        while (!window.__wbg_init && attempts < 50) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-        
-        if (!window.__wbg_init) {
-            throw new Error("vs_wasm script not loaded");
-        }
+        // Import the vs_wasm module
+        const vsWasmModule = await import('./vs_wasm.js');
         
         // Initialize the WASM module
-        await window.__wbg_init('./vs_wasm_bg.wasm');
+        await vsWasmModule.default('./vs_wasm_bg.wasm');
         debugLog("vs_wasm initialized successfully");
         
         // Set up the module classes
         window.vsWasmModule = {
-            Keyshare: window.Keyshare,
-            KeyExportSession: window.KeyExportSession
+            Keyshare: vsWasmModule.Keyshare,
+            KeyExportSession: vsWasmModule.KeyExportSession
         };
         
         return window.vsWasmModule;
