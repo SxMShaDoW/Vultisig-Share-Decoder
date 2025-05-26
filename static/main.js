@@ -26,30 +26,28 @@ const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.imp
 // Initialize vs_wasm_bg.wasm (additional WASM module)
 const initVsWasm = (async () => {
     try {
-        // Create a script tag to load the module as ES6 module
-        const script = document.createElement('script');
-        script.type = 'module';
-        script.textContent = `
-            import init, { Keyshare, KeyExportSession } from './vs_wasm.js';
-            
-            window.vsWasmInit = init;
-            window.vsWasmClasses = { Keyshare, KeyExportSession };
-        `;
-        document.head.appendChild(script);
+        // Wait for the vs_wasm script to be available
+        let attempts = 0;
+        while (!window.__wbg_init && attempts < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
         
-        // Wait for the script to load
-        await new Promise((resolve, reject) => {
-            script.onload = resolve;
-            script.onerror = reject;
-            setTimeout(reject, 5000); // 5 second timeout
-        });
+        if (!window.__wbg_init) {
+            throw new Error("vs_wasm script not loaded");
+        }
         
         // Initialize the WASM module
-        await window.vsWasmInit('./vs_wasm_bg.wasm');
+        await window.__wbg_init('./vs_wasm_bg.wasm');
         debugLog("vs_wasm initialized successfully");
         
-        window.vsWasmModule = window.vsWasmClasses;
-        return window.vsWasmClasses;
+        // Set up the module classes
+        window.vsWasmModule = {
+            Keyshare: window.Keyshare,
+            KeyExportSession: window.KeyExportSession
+        };
+        
+        return window.vsWasmModule;
     } catch (error) {
         debugLog(`vs_wasm initialization failed: ${error.message}`);
         debugLog("Note: vs_wasm is optional for DKLS processing");
