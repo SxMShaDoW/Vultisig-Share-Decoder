@@ -20,8 +20,6 @@ import (
 )
 
 func ProcessFiles(files []string, passwords []string, source types.InputSource) (string, error) {
-	var outputBuilder strings.Builder
-
 	if len(files) == 0 {
 		return "", fmt.Errorf("no files provided")
 	}
