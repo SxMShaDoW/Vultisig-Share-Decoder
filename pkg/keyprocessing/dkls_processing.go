@@ -53,30 +53,32 @@ func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []
 		fmt.Fprintf(outputBuilder, "\n")
 	}
 
-	// Try to reconstruct if wrapper is available
-	if dklsWrapper != nil {
-		fmt.Fprintf(outputBuilder, "Attempting DKLS key reconstruction...\n")
-
-		// Check if Node.js is available
-		if _, err := exec.LookPath("node"); err != nil {
-			fmt.Fprintf(outputBuilder, "Node.js not found. Please install Node.js to enable DKLS reconstruction.\n")
-		} else {
-			response, err := dklsWrapper.ExportKey(dklsShares, partyIDs, threshold)
-			if err != nil {
-				fmt.Fprintf(outputBuilder, "Key reconstruction failed: %v\n", err)
-			} else if response.Success {
-				fmt.Fprintf(outputBuilder, "\n=== DKLS Key Reconstruction Successful! ===\n")
-				fmt.Fprintf(outputBuilder, "Private Key: %s\n", response.PrivateKey)
-				fmt.Fprintf(outputBuilder, "Public Key: %s\n", response.PublicKey)
+	// Try native Go DKLS reconstruction first
+	fmt.Fprintf(outputBuilder, "Attempting native Go DKLS key reconstruction...\n")
+	if err := dkls.ProcessDKLSSharesNative(dklsShares, partyIDs, threshold, outputBuilder); err != nil {
+		fmt.Fprintf(outputBuilder, "Native reconstruction failed: %v\n", err)
+		
+		// Fallback to WASM if available
+		if dklsWrapper != nil {
+			fmt.Fprintf(outputBuilder, "\nFalling back to WASM reconstruction...\n")
+			
+			// Check if Node.js is available
+			if _, err := exec.LookPath("node"); err != nil {
+				fmt.Fprintf(outputBuilder, "Node.js not found. Please install Node.js to enable WASM DKLS reconstruction.\n")
 			} else {
-				fmt.Fprintf(outputBuilder, "Key reconstruction failed: %s\n", response.Error)
+				response, err := dklsWrapper.ExportKey(dklsShares, partyIDs, threshold)
+				if err != nil {
+					fmt.Fprintf(outputBuilder, "WASM reconstruction failed: %v\n", err)
+				} else if response.Success {
+					fmt.Fprintf(outputBuilder, "\n=== WASM DKLS Key Reconstruction Successful! ===\n")
+					fmt.Fprintf(outputBuilder, "Private Key: %s\n", response.PrivateKey)
+					fmt.Fprintf(outputBuilder, "Public Key: %s\n", response.PublicKey)
+				} else {
+					fmt.Fprintf(outputBuilder, "WASM reconstruction failed: %s\n", response.Error)
+				}
 			}
 		}
 	}
-
-	fmt.Fprintf(outputBuilder, "\nNote: DKLS key reconstruction requires the full mobile-tss-lib implementation.\n")
-	fmt.Fprintf(outputBuilder, "This tool currently displays share information for DKLS vaults.\n")
-	fmt.Fprintf(outputBuilder, "For actual key reconstruction, please use the official Vultisig mobile app.\n")
 
 	return nil
 }
