@@ -466,6 +466,42 @@ pre {
     border-radius: 4px;
 }
 
+/* Scheme Selection Styles */
+.scheme-selection {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.scheme-selection label {
+    font-weight: bold;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.scheme-options {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.scheme-options input[type="radio"] {
+    margin-right: 5px;
+}
+
+.scheme-options label {
+    font-weight: normal;
+    margin-bottom: 0;
+    display: inline;
+    cursor: pointer;
+}
+
+.upload-section {
+    margin-bottom: 20px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .container {

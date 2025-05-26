@@ -22,6 +22,24 @@
 
             <section id="fileInputs" class="file-inputs">
                 <h3>Upload your vault shares</h3>
+                <div class="scheme-selection">
+            <label>Scheme Type:</label>
+            <div class="scheme-options">
+                <input type="radio" id="auto" name="scheme" value="auto" checked>
+                <label for="auto">Auto-detect</label>
+
+                <input type="radio" id="gg20" name="scheme" value="gg20">
+                <label for="gg20">GG20 TSS</label>
+
+                <input type="radio" id="dkls" name="scheme" value="dkls">
+                <label for="dkls">DKLS</label>
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <label for="files">Select vault files (.vult, .bak, .dat):</label>
+            <input type="file" id="files" multiple accept=".vult,.bak,.dat">
+        </div>
                 <div class="file-group" id="fileGroup0">
                     <div class="input-wrapper">
                         <input type="file" accept=".bak,.vult" class="file-input" />
@@ -41,7 +59,7 @@
                     Recover Keys
                 </button>
             </div>
-            
+
             <section id="results" class="results-section debug-section">
             </section>
 
@@ -110,7 +128,7 @@
             </section>
         </main>
 
-        
+
 
         <footer class="footer">
             <section class="footer-section">

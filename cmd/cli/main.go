@@ -28,6 +28,11 @@ func main() {
                         Required:   true,
                         HasBeenSet: false,
                     },
+                    &cli.StringFlag{
+                        Name:  "scheme",
+                        Usage: "force scheme type (gg20, dkls, auto)",
+                        Value: "auto",
+                    },
                 },
                 Action: RecoverAction,
             },

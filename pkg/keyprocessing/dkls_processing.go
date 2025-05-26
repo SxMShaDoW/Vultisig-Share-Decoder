@@ -6,7 +6,6 @@ import (
     "fmt"
     "strings"
     "log"
-    "main/pkg/types"
     "main/pkg/dkls"
     "main/pkg/keyhandlers"
     "github.com/btcsuite/btcd/btcutil/hdkeychain"

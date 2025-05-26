@@ -25,6 +25,7 @@ func main() {
         // args[0] = file contents
         // args[1] = passwords
         // args[2] = filenames
+        // args[3] = scheme (optional)
         var fileInfos []types.FileInfo
         passwords := make([]string, args[1].Length())
 

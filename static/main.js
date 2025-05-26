@@ -275,7 +275,7 @@ function displayResults(result) {
             <pre class="debug-output">${parsed.RawOutput}</pre>
         </div>
     </div>`
-    
+
     resultDiv.innerHTML = html;
     debugLog('Results displayed successfully');
 }
@@ -337,4 +337,3 @@ function copyToClipboard(text, event) {
         //console.error('Failed to copy:', err);
     });
 }
-

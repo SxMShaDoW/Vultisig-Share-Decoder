@@ -26,3 +26,19 @@ defaultBucketID = "replit-objstore-149b9641-398f-4de6-9ec3-82b50061bd0c"
 [[ports]]
 localPort = 8080
 externalPort = 80
+
+[workflows]
+runButton = "Build and Run Server"
+
+[[workflows.workflow]]
+name = "Build and Run Server"
+author = 34845985
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "make all"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./dist/webserver"

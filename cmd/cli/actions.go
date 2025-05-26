@@ -24,7 +24,22 @@ func ProcessFiles(files []string, passwords []string, source types.InputSource) 
       return "", fmt.Errorf("no files provided")
   }
 
-  allSecret := make([]types.TempLocalState, 0, len(files))
+  // Convert files to FileInfo format for scheme detection
+  var fileInfos []types.FileInfo
+  for _, f := range files {
+      content, err := fileutils.ReadFileContent(f)
+      if err != nil {
+          return "", fmt.Errorf("error reading file %s: %w", f, err)
+      }
+      fileInfos = append(fileInfos, types.FileInfo{
+          Name:    f,
+          Content: content,
+      })
+  }
+
+  // Use shared processing function which handles scheme detection
+  return shared.ProcessFileContent(fileInfos, passwords, source)
+}
 
   for i, f := range files {
       var password string
