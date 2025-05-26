@@ -100,8 +100,21 @@ func RecoverAction(cCtx *cli.Context) error {
 	passwords := make([]string, len(files))
 	source := types.CommandLine
 
-	//output, err := ProcessFiles(files, passwords, source)
-	output, err := ProcessFilesContent(files, passwords, source)
+	// Convert files to FileInfo format for scheme detection
+	var fileInfos []types.FileInfo
+	for _, f := range files {
+		content, err := fileutils.ReadFileContent(f)
+		if err != nil {
+			return fmt.Errorf("error reading file %s: %w", f, err)
+		}
+		fileInfos = append(fileInfos, types.FileInfo{
+			Name:    f,
+			Content: content,
+		})
+	}
+
+	// Use shared processing function which handles scheme detection
+	output, err := shared.ProcessFileContent(fileInfos, passwords, source)
 	if err != nil {
 		return err
 	}
