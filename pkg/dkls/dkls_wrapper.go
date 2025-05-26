@@ -56,21 +56,6 @@ type WASMShareData struct {
 	PartyID   string `json:"partyId"`
 }
 
-// DKLSShareData represents a DKLS share
-type DKLSShareData struct {
-	ID        string
-	ShareData []byte
-	PartyID   string
-}
-
-// KeyExportResponse represents the response after key export
-type KeyExportResponse struct {
-	PrivateKey string
-	PublicKey  string
-	Success    bool
-	Error      string
-}
-
 // ExportKey reconstructs a private key from DKLS shares using the WASM library
 func (w *DKLSWrapper) ExportKey(shares []DKLSShareData, partyIDs []string, threshold int) (*KeyExportResponse, error) {
 	if !w.initialized {
@@ -317,10 +302,3 @@ func (w *DKLSWrapper) ReconstructPrivateKey(localState *types.DKLSLocalState) (*
 	return result, nil
 }
 
-// DKLSKeyResult represents the DKLS key reconstruction result
-type DKLSKeyResult struct {
-	PrivateKeyHex string
-	PublicKeyHex  string
-	Address       string
-	KeyType       types.KeyType
-}
