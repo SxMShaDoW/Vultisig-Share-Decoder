@@ -85,6 +85,13 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 			return fmt.Errorf("failed to parse DKLS vault from file %s: %w", fileInfo.Name, err)
 		}
 
+		// Log vault information for debugging
+		log.Printf("Vault: Name='%s', LocalPartyId='%s', ResharePrefix='%s'", 
+			vault.Name, vault.LocalPartyId, vault.ResharePrefix)
+		log.Printf("Vault has %d keyshares", len(vault.KeyShares))
+		log.Printf("PublicKeyEcdsa: %s", vault.PublicKeyEcdsa)
+		log.Printf("PublicKeyEddsa: %s", vault.PublicKeyEddsa)
+
 		// Extract DKLS share data from vault
 		shareData := dkls.DKLSShareData{
 			ID:      vault.LocalPartyId,
@@ -93,9 +100,17 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 
 		// Get keyshare data - for DKLS, we need the raw keyshare content
 		if len(vault.KeyShares) > 0 {
-			// For DKLS, the keyshare is not JSON but raw binary data
-			shareData.ShareData = []byte(vault.KeyShares[0].Keyshare)
+			// For DKLS, the keyshare is not JSON but raw binary/string data
+			keyshareData := vault.KeyShares[0].Keyshare
+			shareData.ShareData = []byte(keyshareData)
 			log.Printf("DKLS keyshare data length: %d bytes", len(shareData.ShareData))
+			log.Printf("Keyshare preview: %s", string(shareData.ShareData[:min(len(shareData.ShareData), 100)]))
+			
+			// If there are multiple keyshares, log them all
+			for j, ks := range vault.KeyShares {
+				log.Printf("Keyshare %d: PublicKey=%s, Length=%d bytes", 
+					j, ks.PublicKey, len(ks.Keyshare))
+			}
 		} else {
 			log.Printf("Warning: No keyshares found in DKLS vault")
 		}
