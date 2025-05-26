@@ -24,17 +24,32 @@ const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.imp
     });
 
 // Initialize vs_wasm_bg.wasm (additional WASM module)
-const initVsWasm = import('./vs_wasm.js')
+const initVsWasm = fetch('./vs_wasm_bg.wasm')
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Failed to fetch vs_wasm_bg.wasm: ${response.status} ${response.statusText}`);
+        }
+        debugLog(`vs_wasm_bg.wasm fetched successfully, size: ${response.headers.get('content-length')} bytes`);
+        return response.arrayBuffer();
+    })
+    .then(bytes => {
+        debugLog(`vs_wasm_bg.wasm loaded, size: ${bytes.byteLength} bytes`);
+        if (bytes.byteLength === 0) {
+            throw new Error('vs_wasm_bg.wasm file is empty');
+        }
+        return import('./vs_wasm.js');
+    })
     .then(async (vsWasmModule) => {
         debugLog("vs_wasm module loaded, initializing...");
-        const result = await vsWasmModule.default();
+        const result = await vsWasmModule.default('./vs_wasm_bg.wasm');
         debugLog("vs_wasm initialized successfully");
         window.vsWasmModule = vsWasmModule;
         window.vsWasmInstance = result;
         return result;
     })
     .catch((error) => {
-        debugLog(`vs_wasm initialization failed: ${error}`);
+        debugLog(`vs_wasm initialization failed: ${error.message}`);
+        debugLog("Note: vs_wasm is optional for DKLS processing");
         // Don't reject, just resolve with null to allow main app to continue
         return null;
     });
