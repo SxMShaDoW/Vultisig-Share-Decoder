@@ -24,28 +24,20 @@ const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.imp
     });
 
 // Initialize vs_wasm_bg.wasm (additional WASM module)
-const initVsWasm = new Promise((resolve, reject) => {
-    // Wait for vs_wasm.js to be fully loaded
-    const checkVsWasm = () => {
-        if (typeof window.initVsWasm === 'function') {
-            debugLog("Initializing vs_wasm module...");
-            window.initVsWasm()
-                .then((result) => {
-                    debugLog("vs_wasm initialized successfully");
-                    window.vsWasmInstance = result;
-                    resolve(result);
-                })
-                .catch((error) => {
-                    debugLog(`vs_wasm initialization failed: ${error}`);
-                    // Don't reject, just resolve with null to allow main app to continue
-                    resolve(null);
-                });
-        } else {
-            setTimeout(checkVsWasm, 100);
-        }
-    };
-    checkVsWasm();
-});
+const initVsWasm = import('./vs_wasm.js')
+    .then(async (vsWasmModule) => {
+        debugLog("vs_wasm module loaded, initializing...");
+        const result = await vsWasmModule.default();
+        debugLog("vs_wasm initialized successfully");
+        window.vsWasmModule = vsWasmModule;
+        window.vsWasmInstance = result;
+        return result;
+    })
+    .catch((error) => {
+        debugLog(`vs_wasm initialization failed: ${error}`);
+        // Don't reject, just resolve with null to allow main app to continue
+        return null;
+    });
 
 // Wait for both WASM modules to initialize
 Promise.all([initMainWasm, initVsWasm])
