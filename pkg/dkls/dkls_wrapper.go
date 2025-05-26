@@ -1,121 +1,134 @@
-
-// dkls_wrapper.go - Go wrapper for DKLS WASM library
 package dkls
 
 import (
-    "context"
-    "encoding/hex"
-    "fmt"
-    "log"
-    "main/pkg/types"
-    "os/exec"
-    "encoding/json"
-    "os"
+	"context"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log"
+	"main/pkg/types"
+	"os"
+	"os/exec"
 )
 
 // DKLSWrapper provides a Go interface to the DKLS WASM library
 type DKLSWrapper struct {
-    initialized bool
-    wasmPath    string
-    jsPath      string
+	initialized bool
+	wasmPath    string
+	jsPath      string
 }
 
 // NewDKLSWrapper creates a new instance of the DKLS wrapper
 func NewDKLSWrapper() *DKLSWrapper {
-    return &DKLSWrapper{
-        initialized: false,
-        wasmPath:    "static/vs_wasm_bg.wasm",
-        jsPath:      "static/vs_wasm.js",
-    }
+	return &DKLSWrapper{
+		initialized: false,
+		wasmPath:    "static/vs_wasm_bg.wasm",
+		jsPath:      "static/vs_wasm.js",
+	}
 }
 
 // Initialize initializes the DKLS WASM library
 func (w *DKLSWrapper) Initialize() error {
-    // Check if WASM files exist
-    if _, err := os.Stat(w.wasmPath); os.IsNotExist(err) {
-        return fmt.Errorf("DKLS WASM binary not found at %s", w.wasmPath)
-    }
-    if _, err := os.Stat(w.jsPath); os.IsNotExist(err) {
-        return fmt.Errorf("DKLS JS wrapper not found at %s", w.jsPath)
-    }
-    
-    w.initialized = true
-    log.Println("DKLS wrapper initialized with WASM library")
-    return nil
+	// Check if WASM files exist
+	if _, err := os.Stat(w.wasmPath); os.IsNotExist(err) {
+		return fmt.Errorf("DKLS WASM binary not found at %s", w.wasmPath)
+	}
+	if _, err := os.Stat(w.jsPath); os.IsNotExist(err) {
+		return fmt.Errorf("DKLS JS wrapper not found at %s", w.jsPath)
+	}
+
+	w.initialized = true
+	log.Println("DKLS wrapper initialized with WASM library")
+	return nil
 }
 
 // KeyExportRequest represents the structure for WASM key export
 type KeyExportRequest struct {
-    Shares    []WASMShareData `json:"shares"`
-    PartyIDs  []string        `json:"partyIds"`
-    Threshold int             `json:"threshold"`
+	Shares    []WASMShareData `json:"shares"`
+	PartyIDs  []string        `json:"partyIds"`
+	Threshold int             `json:"threshold"`
 }
 
 // WASMShareData represents a share in the format expected by the WASM library
 type WASMShareData struct {
-    ID        string `json:"id"`
-    ShareData string `json:"shareData"` // hex encoded
-    PartyID   string `json:"partyId"`
+	ID        string `json:"id"`
+	ShareData string `json:"shareData"` // hex encoded
+	PartyID   string `json:"partyId"`
+}
+
+// DKLSShareData represents a DKLS share
+type DKLSShareData struct {
+	ID        string
+	ShareData []byte
+	PartyID   string
+}
+
+// KeyExportResponse represents the response after key export
+type KeyExportResponse struct {
+	PrivateKey string
+	PublicKey  string
+	Success    bool
+	Error      string
 }
 
 // ExportKey reconstructs a private key from DKLS shares using the WASM library
 func (w *DKLSWrapper) ExportKey(shares []DKLSShareData, partyIDs []string, threshold int) (*KeyExportResponse, error) {
-    if !w.initialized {
-        return nil, fmt.Errorf("DKLS wrapper not initialized")
-    }
+	if !w.initialized {
+		return nil, fmt.Errorf("DKLS wrapper not initialized")
+	}
 
-    if len(shares) < threshold {
-        return nil, fmt.Errorf("insufficient shares: need %d, got %d", threshold, len(shares))
-    }
+	if len(shares) < threshold {
+		return nil, fmt.Errorf("insufficient shares: need %d, got %d", threshold, len(shares))
+	}
 
-    // Convert shares to WASM format
-    wasmShares := make([]WASMShareData, len(shares))
-    for i, share := range shares {
-        wasmShares[i] = WASMShareData{
-            ID:        share.ID,
-            ShareData: hex.EncodeToString(share.ShareData),
-            PartyID:   share.PartyID,
-        }
-    }
+	// Convert shares to WASM format
+	wasmShares := make([]WASMShareData, len(shares))
+	for i, share := range shares {
+		wasmShares[i] = WASMShareData{
+			ID:        share.ID,
+			ShareData: hex.EncodeToString(share.ShareData),
+			PartyID:   share.PartyID,
+		}
+	}
 
-    request := KeyExportRequest{
-        Shares:    wasmShares,
-        PartyIDs:  partyIDs,
-        Threshold: threshold,
-    }
+	request := KeyExportRequest{
+		Shares:    wasmShares,
+		PartyIDs:  partyIDs,
+		Threshold: threshold,
+	}
 
-    // Create a temporary script to call the WASM library
-    script := w.generateNodeScript(request)
-    
-    // Execute the script using Node.js
-    result, err := w.executeNodeScript(script)
-    if err != nil {
-        return nil, fmt.Errorf("failed to execute DKLS key export: %w", err)
-    }
+	// Create a temporary script to call the WASM library
+	script := w.generateNodeScript(request)
 
-    response := &KeyExportResponse{
-        PrivateKey: []byte(result.PrivateKey),
-        PublicKey:  []byte(result.PublicKey),
-        Success:    result.Success,
-        Error:      result.Error,
-    }
+	// Execute the script using Node.js
+	result, err := w.executeNodeScript(script)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute DKLS key export: %w", err)
+	}
 
-    return response, nil
+	response := &KeyExportResponse{
+		PrivateKey: result.PrivateKey,
+		PublicKey:  result.PublicKey,
+		Success:    result.Success,
+		Error:      result.Error,
+	}
+
+	return response, nil
 }
 
 // NodeScriptResult represents the result from the Node.js script
 type NodeScriptResult struct {
-    PrivateKey string `json:"privateKey"`
-    PublicKey  string `json:"publicKey"`
-    Success    bool   `json:"success"`
-    Error      string `json:"error"`
+	PrivateKey string `json:"privateKey"`
+	PublicKey  string `json:"publicKey"`
+	Success    bool   `json:"success"`
+	Error      string `json:"error"`
 }
 
 // generateNodeScript creates a Node.js script to call the WASM library
 func (w *DKLSWrapper) generateNodeScript(request KeyExportRequest) string {
-    requestJSON, _ := json.Marshal(request)
-    
-    script := fmt.Sprintf(`
+	requestJSON, _ := json.Marshal(request)
+
+	script := fmt.Sprintf(`
 const fs = require('fs');
 const path = require('path');
 
@@ -126,32 +139,32 @@ async function runDKLS() {
         const wasmModule = await import('file://' + path.resolve('%s'));
         const init = wasmModule.default;
         const { KeyExportSession, Keyshare } = wasmModule;
-        
+
         // Initialize WASM with the binary file
         await init('file://' + path.resolve('%s'));
-        
+
         const request = %s;
-        
+
         // Convert shares to the format expected by WASM
         let reconstructedKey = null;
         let publicKey = null;
-        
+
         if (request.shares && request.shares.length >= request.threshold) {
             try {
                 // Take first share and create session
                 const firstShare = request.shares[0];
                 const partyIds = request.partyIds.join(',');
-                
+
                 // Create key export session
                 const session = KeyExportSession.new(firstShare.shareData, partyIds);
-                
+
                 // Get setup message (if needed for multi-party protocol)
                 const setupMsg = session.getsetup();
-                
+
                 // For single-party reconstruction, directly finish
                 const privateKeyBytes = session.finish();
                 reconstructedKey = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-                
+
                 // Try to get public key from share
                 try {
                     const keyshare = Keyshare.fromBytes(Buffer.from(firstShare.shareData, 'hex'));
@@ -161,14 +174,14 @@ async function runDKLS() {
                     console.error('Could not extract public key:', pubKeyError.message);
                     publicKey = "unavailable";
                 }
-                
+
                 console.log(JSON.stringify({
                     privateKey: reconstructedKey,
                     publicKey: publicKey,
                     success: true,
                     error: ""
                 }));
-                
+
             } catch (reconstructError) {
                 console.log(JSON.stringify({
                     privateKey: "",
@@ -185,7 +198,7 @@ async function runDKLS() {
                 error: "Insufficient shares for reconstruction"
             }));
         }
-        
+
     } catch (error) {
         console.log(JSON.stringify({
             privateKey: "",
@@ -199,107 +212,115 @@ async function runDKLS() {
 runDKLS().catch(console.error);
 `, w.jsPath, w.wasmPath, string(requestJSON))
 
-    return script
+	return script
 }
 
 // executeNodeScript executes a Node.js script and returns the result
 func (w *DKLSWrapper) executeNodeScript(script string) (*NodeScriptResult, error) {
-    // Create temporary script file
-    tmpFile, err := os.CreateTemp("", "dkls_script_*.js")
-    if err != nil {
-        return nil, err
-    }
-    defer os.Remove(tmpFile.Name())
-    
-    if _, err := tmpFile.WriteString(script); err != nil {
-        return nil, err
-    }
-    tmpFile.Close()
+	// Create temporary script file
+	tmpFile, err := os.CreateTemp("", "dkls_script_*.js")
+	if err != nil {
+		return nil, err
+	}
+	defer os.Remove(tmpFile.Name())
 
-    // Execute with Node.js
-    ctx := context.Background()
-    cmd := exec.CommandContext(ctx, "node", tmpFile.Name())
-    output, err := cmd.Output()
-    if err != nil {
-        return nil, fmt.Errorf("node execution failed: %w", err)
-    }
+	if _, err := tmpFile.WriteString(script); err != nil {
+		return nil, err
+	}
+	tmpFile.Close()
 
-    var result NodeScriptResult
-    if err := json.Unmarshal(output, &result); err != nil {
-        return nil, fmt.Errorf("failed to parse node output: %w", err)
-    }
+	// Execute with Node.js
+	ctx := context.Background()
+	cmd := exec.CommandContext(ctx, "node", tmpFile.Name())
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("node execution failed: %w", err)
+	}
 
-    return &result, nil
+	var result NodeScriptResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse node output: %w", err)
+	}
+
+	return &result, nil
 }
 
 // ValidateShares validates that the provided shares are valid for DKLS
 func (w *DKLSWrapper) ValidateShares(shares []DKLSShareData) error {
-    if len(shares) == 0 {
-        return fmt.Errorf("no shares provided")
-    }
+	if len(shares) == 0 {
+		return fmt.Errorf("no shares provided")
+	}
 
-    for i, share := range shares {
-        if share.ID == "" {
-            return fmt.Errorf("share %d has empty ID", i)
-        }
-        if len(share.ShareData) == 0 {
-            return fmt.Errorf("share %d has empty share data", i)
-        }
-        if share.PartyID == "" {
-            return fmt.Errorf("share %d has empty party ID", i)
-        }
-    }
+	for i, share := range shares {
+		if share.ID == "" {
+			return fmt.Errorf("share %d has empty ID", i)
+		}
+		if len(share.ShareData) == 0 {
+			return fmt.Errorf("share %d has empty share data", i)
+		}
+		if share.PartyID == "" {
+			return fmt.Errorf("share %d has empty party ID", i)
+		}
+	}
 
-    return nil
+	return nil
 }
 
 // ConvertToDKLSLocalState converts DKLS shares to local state format
 func (w *DKLSWrapper) ConvertToDKLSLocalState(shares []DKLSShareData, threshold int) (*types.DKLSLocalState, error) {
-    if err := w.ValidateShares(shares); err != nil {
-        return nil, err
-    }
+	if err := w.ValidateShares(shares); err != nil {
+		return nil, err
+	}
 
-    if len(shares) == 0 {
-        return nil, fmt.Errorf("no shares to convert")
-    }
+	if len(shares) == 0 {
+		return nil, fmt.Errorf("no shares to convert")
+	}
 
-    // Use the first share as the primary share
-    primaryShare := shares[0]
-    
-    partyIDs := make([]string, len(shares))
-    for i, share := range shares {
-        partyIDs[i] = share.PartyID
-    }
+	// Use the first share as the primary share
+	primaryShare := shares[0]
 
-    dklsShare := types.DKLSShare{
-        ID:        primaryShare.ID,
-        ShareData: primaryShare.ShareData,
-        Threshold: threshold,
-        PartyID:   primaryShare.PartyID,
-    }
+	partyIDs := make([]string, len(shares))
+	for i, share := range shares {
+		partyIDs[i] = share.PartyID
+	}
 
-    return &types.DKLSLocalState{
-        Share:      dklsShare,
-        PubKey:     hex.EncodeToString([]byte("placeholder_pubkey")),
-        PartyIDs:   partyIDs,
-        Threshold:  threshold,
-        SchemeType: types.DKLS,
-    }, nil
+	dklsShare := types.DKLSShare{
+		ID:        primaryShare.ID,
+		ShareData: primaryShare.ShareData,
+		Threshold: threshold,
+		PartyID:   primaryShare.PartyID,
+	}
+
+	return &types.DKLSLocalState{
+		Share:      dklsShare,
+		PubKey:     hex.EncodeToString([]byte("placeholder_pubkey")),
+		PartyIDs:   partyIDs,
+		Threshold:  threshold,
+		SchemeType: types.DKLS,
+	}, nil
 }
 
 // ReconstructPrivateKey reconstructs the full private key from shares
 func (w *DKLSWrapper) ReconstructPrivateKey(localState *types.DKLSLocalState) (*DKLSKeyResult, error) {
-    if localState == nil {
-        return nil, fmt.Errorf("nil local state provided")
-    }
+	if localState == nil {
+		return nil, fmt.Errorf("nil local state provided")
+	}
 
-    // For actual implementation, this would use the WASM library
-    result := &DKLSKeyResult{
-        PrivateKeyHex: hex.EncodeToString(localState.Share.ShareData),
-        PublicKeyHex:  localState.PubKey,
-        Address:       "placeholder_address",
-        KeyType:       types.ECDSA, // DKLS typically uses ECDSA
-    }
+	// For actual implementation, this would use the WASM library
+	result := &DKLSKeyResult{
+		PrivateKeyHex: hex.EncodeToString(localState.Share.ShareData),
+		PublicKeyHex:  localState.PubKey,
+		Address:       "placeholder_address",
+		KeyType:       types.ECDSA, // DKLS typically uses ECDSA
+	}
 
-    return result, nil
+	return result, nil
+}
+
+// DKLSKeyResult represents the DKLS key reconstruction result
+type DKLSKeyResult struct {
+	PrivateKeyHex string
+	PublicKeyHex  string
+	Address       string
+	KeyType       types.KeyType
 }

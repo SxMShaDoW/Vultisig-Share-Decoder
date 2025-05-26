@@ -1,4 +1,9 @@
+
 package dkls
+
+import (
+    "main/pkg/types"
+)
 
 // DKLSShare represents a DKLS threshold signature share
 type DKLSShare struct {
@@ -14,21 +19,10 @@ type DKLSShareData struct {
 	ShareData []byte `json:"share_data"`
 }
 
-import (
-    "main/pkg/types"
-)
-
-// DKLSShareData represents the internal structure of a DKLS share
-type DKLSShareData struct {
-    ID        string `json:"id"`
-    ShareData []byte `json:"share_data"`
-    PartyID   string `json:"party_id"`
-}
-
 // KeyExportResponse represents the response from DKLS key export
 type KeyExportResponse struct {
-    PrivateKey []byte `json:"private_key"`
-    PublicKey  []byte `json:"public_key"`
+    PrivateKey string `json:"private_key"`
+    PublicKey  string `json:"public_key"`
     Success    bool   `json:"success"`
     Error      string `json:"error,omitempty"`
 }
