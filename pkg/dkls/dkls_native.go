@@ -8,6 +8,13 @@ import (
 	"log"
 	"main/pkg/types"
 	"strings"
+	"crypto/ecdsa"
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"main/pkg/keyhandlers"
 )
 
 // NativeDKLSProcessor provides Go-native DKLS key reconstruction
@@ -152,12 +159,22 @@ func (p *NativeDKLSProcessor) isValidPrivateKey(key []byte) bool {
 	return !allZero && !allOne
 }
 
-// derivePublicKey derives a public key from a private key (simplified)
+// derivePublicKey derives a public key from a private key using secp256k1
 func (p *NativeDKLSProcessor) derivePublicKey(privateKey []byte) []byte {
-	// This is a simplified public key derivation
-	// In reality, you would use proper elliptic curve operations
-	hash := sha256.Sum256(append(privateKey, []byte("pubkey")...))
-	return hash[:]
+	// Ensure we have 32 bytes
+	if len(privateKey) != 32 {
+		if len(privateKey) > 32 {
+			privateKey = privateKey[:32]
+		} else {
+			padded := make([]byte, 32)
+			copy(padded[32-len(privateKey):], privateKey)
+			privateKey = padded
+		}
+	}
+	
+	// Use proper secp256k1 key derivation
+	_, pubKey := btcec.PrivKeyFromBytes(privateKey)
+	return pubKey.SerializeCompressed()
 }
 
 // deriveAddress derives an address from a public key
@@ -184,11 +201,129 @@ func ProcessDKLSSharesNative(shares []DKLSShareData, partyIDs []string, threshol
 	fmt.Fprintf(outputBuilder, "✅ DKLS Key Reconstruction Successful!\n\n")
 	fmt.Fprintf(outputBuilder, "Private Key (hex): %s\n", result.PrivateKeyHex)
 	fmt.Fprintf(outputBuilder, "Public Key (hex): %s\n", result.PublicKeyHex)
-	fmt.Fprintf(outputBuilder, "Address: %s\n", result.Address)
 	fmt.Fprintf(outputBuilder, "Key Type: %v\n\n", result.KeyType)
 
-	fmt.Fprintf(outputBuilder, "Note: This is a simplified DKLS reconstruction for demonstration.\n")
+	// Generate cryptocurrency addresses
+	err = processor.generateCryptocurrencyAddresses(result.PrivateKeyHex, outputBuilder)
+	if err != nil {
+		fmt.Fprintf(outputBuilder, "Warning: Could not generate cryptocurrency addresses: %v\n", err)
+	}
+
+	fmt.Fprintf(outputBuilder, "\nNote: This is a simplified DKLS reconstruction for demonstration.\n")
 	fmt.Fprintf(outputBuilder, "For production use, implement the full DKLS threshold cryptography protocol.\n")
+
+	return nil
+}
+
+// generateCryptocurrencyAddresses generates addresses for various cryptocurrencies
+func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex string, outputBuilder *strings.Builder) error {
+	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		return fmt.Errorf("failed to decode private key: %w", err)
+	}
+
+	// Ensure we have 32 bytes for secp256k1
+	if len(privateKeyBytes) != 32 {
+		// Pad or truncate to 32 bytes
+		if len(privateKeyBytes) > 32 {
+			privateKeyBytes = privateKeyBytes[:32]
+		} else {
+			padded := make([]byte, 32)
+			copy(padded[32-len(privateKeyBytes):], privateKeyBytes)
+			privateKeyBytes = padded
+		}
+	}
+
+	// Create secp256k1 private key
+	privateKey, publicKey := btcec.PrivKeyFromBytes(privateKeyBytes)
+	
+	fmt.Fprintf(outputBuilder, "\n=== Cryptocurrency Addresses ===\n")
+	fmt.Fprintf(outputBuilder, "Root private key: %s\n", hex.EncodeToString(privateKey.Serialize()))
+	fmt.Fprintf(outputBuilder, "Root public key: %s\n\n", hex.EncodeToString(publicKey.SerializeCompressed()))
+
+	// Generate Ethereum address
+	ethereumPrivKey := privateKey.ToECDSA()
+	ethereumAddress := crypto.PubkeyToAddress(ethereumPrivKey.PublicKey)
+	fmt.Fprintf(outputBuilder, "Ethereum Address: %s\n", ethereumAddress.Hex())
+
+	// Generate Bitcoin addresses
+	net := &chaincfg.MainNetParams
+	
+	// Create WIF for Bitcoin
+	wif, err := btcutil.NewWIF(privateKey, net, true)
+	if err == nil {
+		fmt.Fprintf(outputBuilder, "Bitcoin WIF: %s\n", wif.String())
+	}
+
+	// P2WPKH (Native SegWit) Bitcoin address
+	addressPubKey, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(publicKey.SerializeCompressed()), net)
+	if err == nil {
+		fmt.Fprintf(outputBuilder, "Bitcoin Address (P2WPKH): %s\n", addressPubKey.EncodeAddress())
+	}
+
+	// Generate derived addresses for various cryptocurrencies
+	// Create a dummy chaincode for HD derivation (in real DKLS, this would come from the vault)
+	chaincode := sha256.Sum256([]byte("dkls-chaincode"))
+	
+	extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincode[:], []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
+	
+	// Define supported coins with their derivation paths
+	supportedCoins := []struct {
+		name       string
+		derivePath string
+		action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
+	}{
+		{
+			name:       "Bitcoin",
+			derivePath: "m/84'/0'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowBitcoinKey(key, output)
+			},
+		},
+		{
+			name:       "Ethereum",
+			derivePath: "m/44'/60'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowEthereumKey(key, output)
+			},
+		},
+		{
+			name:       "Dogecoin",
+			derivePath: "m/44'/3'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowDogecoinKey(key, output)
+			},
+		},
+		{
+			name:       "Litecoin",
+			derivePath: "m/84'/2'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowLitecoinKey(key, output)
+			},
+		},
+		{
+			name:       "THORChain",
+			derivePath: "m/44'/931'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.CosmosLikeKeyHandler(key, "thor", "thorv", "thorc", output, "THORChain")
+			},
+		},
+	}
+
+	fmt.Fprintf(outputBuilder, "\n=== Derived Cryptocurrency Keys ===\n")
+	for _, coin := range supportedCoins {
+		fmt.Fprintf(outputBuilder, "\n--- %s ---\n", coin.name)
+		
+		derivedKey, err := keyhandlers.GetDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
+		if err != nil {
+			fmt.Fprintf(outputBuilder, "Error deriving %s key: %v\n", coin.name, err)
+			continue
+		}
+
+		if err := coin.action(derivedKey, outputBuilder); err != nil {
+			fmt.Fprintf(outputBuilder, "Error generating %s addresses: %v\n", coin.name, err)
+		}
+	}
 
 	return nil
 }
