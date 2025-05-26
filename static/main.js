@@ -655,8 +655,28 @@ Share ${i + 1} (${fileNames[i]}):
             
             debugLog(`Attempting to create Keyshare from ${firstShare.keyshareData.length} bytes`);
             
-            // Try to create a keyshare object from the raw data
-            const keyshare = Keyshare.fromBytes(firstShare.keyshareData);
+            // Convert keyshare data to proper format for vs_wasm
+            let keyshareBytes;
+            
+            // Check if keyshare data is hex-encoded string
+            try {
+                const keyshareStr = new TextDecoder().decode(firstShare.keyshareData);
+                if (/^[0-9a-fA-F]+$/.test(keyshareStr.trim())) {
+                    // It's hex-encoded, decode it
+                    const hexStr = keyshareStr.trim();
+                    keyshareBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                    debugLog(`Decoded hex keyshare to ${keyshareBytes.length} bytes`);
+                } else {
+                    // Try as raw binary data
+                    keyshareBytes = firstShare.keyshareData;
+                }
+            } catch (e) {
+                // Use raw data if text decoding fails
+                keyshareBytes = firstShare.keyshareData;
+            }
+            
+            // Try to create a keyshare object from the processed data
+            const keyshare = Keyshare.fromBytes(keyshareBytes);
             
             // Create key export session
             const session = KeyExportSession.new(keyshare, partyIds);
@@ -686,12 +706,43 @@ Note: DKLS key reconstruction completed using WASM library.
         } catch (wasmError) {
             debugLog(`WASM processing error: ${wasmError}`);
             
-            result += `
+            // Try alternative approach with base64 decoding
+            try {
+                debugLog("Trying alternative keyshare processing...");
+                const firstShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
+                
+                // Try base64 decoding the keyshare data
+                const keyshareStr = new TextDecoder().decode(firstShare.keyshareData);
+                const base64Decoded = new Uint8Array(atob(keyshareStr).split('').map(c => c.charCodeAt(0)));
+                
+                const { Keyshare } = window.vsWasmModule;
+                const keyshare = Keyshare.fromBytes(base64Decoded);
+                
+                debugLog("Alternative processing successful!");
+                
+                // Get public key from keyshare
+                const publicKeyBytes = keyshare.publicKey();
+                const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                result = `=== DKLS Key Information (Partial) ===
+
+Public Key: ${publicKey}
+
+${result}
+
+Note: Could not complete full key reconstruction, but extracted public key.
+`;
+                
+            } catch (altError) {
+                debugLog(`Alternative processing also failed: ${altError}`);
+                
+                result += `
 
 Error: ${wasmError}
 
 Note: Key reconstruction failed, but share information is displayed above.
 `;
+            }
         }
         
         displayResults(result);
