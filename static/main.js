@@ -687,12 +687,7 @@ function extractField(content, fieldName) {
 
 async function processDKLSWithWASM(files, passwords, fileNames) {
     try {
-        // Check if vs_wasm module is available
-        if (!window.vsWasmModule) {
-            throw new Error("DKLS WASM module not available. Please reload the page.");
-        }
-
-        debugLog("DKLS WASM module available, processing shares...");
+        debugLog("Starting DKLS processing...");
 
         // Parse the vault files to extract DKLS shares
         const dklsShares = [];
@@ -749,20 +744,14 @@ Share ${i + 1} (${fileNames[i]}):
 
         // Try to use the vs_wasm module for key reconstruction
         try {
-            // Wait for WASM module to be fully initialized if still loading
-            if (!window.vsWasmModule) {
-                debugLog("WASM module not ready, waiting for initialization...");
-                const vsModule = await initVsWasm;
-                if (!vsModule) {
-                    throw new Error("WASM module failed to initialize");
-                }
-            }
-
+            // Check if WASM module is available without causing infinite recursion
             if (!window.vsWasmModule || !window.vsWasmModule.Keyshare) {
-                throw new Error("WASM module classes not available");
+                throw new Error("DKLS WASM module not available or not properly initialized");
             }
 
-            const { KeyExportSession, Keyshare } = window.vsWasmModule;
+            debugLog("DKLS WASM module available, processing keyshares...");
+
+            const { Keyshare } = window.vsWasmModule;
 
             // Get the first share with keyshare data
             const validShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
@@ -772,97 +761,44 @@ Share ${i + 1} (${fileNames[i]}):
 
             debugLog(`Attempting to create Keyshare from ${validShare.keyshareData.length} bytes`);
 
-            // Try different approaches to decode the keyshare data
+            // Simplified approach - try to extract keyshare data
             let keyshareBytes = null;
+            let publicKey = null;
 
-            // Approach 1: Try as hex-encoded string first (most likely based on logs)
             try {
+                // Try to decode as string first
                 const keyshareStr = new TextDecoder().decode(validShare.keyshareData);
-                debugLog(`Decoded keyshare as string: ${keyshareStr.substring(0, 100)}...`);
+                debugLog(`Keyshare string preview: ${keyshareStr.substring(0, 50)}...`);
 
-                // Check if it's hex-encoded
+                // Simple hex check and decode
                 if (/^[0-9a-fA-F\s]+$/.test(keyshareStr.trim())) {
                     const hexStr = keyshareStr.replace(/\s/g, '').trim();
-                    debugLog(`Detected hex string, length: ${hexStr.length}`);
-
-                    // Convert hex to bytes
-                    const hexBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                    debugLog(`Converted to bytes: ${hexBytes.length} bytes`);
-
-                    // Check if the hex-decoded data is base64
-                    const hexString = new TextDecoder().decode(hexBytes);
-                    debugLog(`Hex-decoded string preview: ${hexString.substring(0, 50)}...`);
-
-                    if (/^[A-Za-z0-9+/]+=*$/.test(hexString.trim())) {
-                        debugLog("Detected base64 inside hex encoding, decoding...");
-                        const base64Bytes = new Uint8Array(atob(hexString.trim()).split('').map(c => c.charCodeAt(0)));
-                        keyshareBytes = base64Bytes;
-                        debugLog(`Final keyshare bytes: ${keyshareBytes.length} bytes`);
-                    } else {
-                        keyshareBytes = hexBytes;
-                        debugLog(`Using hex-decoded bytes directly: ${keyshareBytes.length} bytes`);
+                    if (hexStr.length > 0 && hexStr.length % 2 === 0) {
+                        keyshareBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                        debugLog(`Decoded hex to ${keyshareBytes.length} bytes`);
                     }
-
-                    const keyshare = Keyshare.fromBytes(keyshareBytes);
-                    debugLog("Successfully created keyshare from hex/base64 decoded data");
-
-                    // Get public key from keyshare
-                    const publicKeyBytes = keyshare.publicKey();
-                    const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-                    result = `=== DKLS Key Information (Decoded) ===
-
-Public Key: ${publicKey}
-
-${result}
-
-Note: Successfully extracted public key from DKLS keyshare data.
-`;
-
-                } else {
-                    throw new Error("Data is not valid hex format");
                 }
 
-            } catch (hexError) {
-                debugLog(`Hex decoding failed: ${hexError.message}`);
-
-                // Approach 2: Try direct binary data (skip protobuf headers)
-                try {
-                    // Look for the actual keyshare data by skipping protobuf field headers
-                    let offset = 0;
-                    const data = validShare.keyshareData;
-
-                    // Skip protobuf headers and find the largest data chunk
-                    while (offset < data.length - 100) {
-                        const fieldHeader = data[offset];
-                        const wireType = fieldHeader & 0x07;
-
-                        if (wireType === 2) { // Length-delimited
-                            offset++;
-                            const lengthResult = readVarint(data, offset);
-                            offset += getVarintLength(data, offset);
-
-                            if (lengthResult.value > 1000 && lengthResult.value < data.length && offset + lengthResult.value <= data.length) {
-                                // This might be the actual keyshare data
-                                keyshareBytes = data.slice(offset, offset + lengthResult.value);
-                                debugLog(`Found potential keyshare at offset ${offset}, length ${lengthResult.value}`);
-                                break;
-                            }
-                            offset += lengthResult.value;
-                        } else {
-                            offset++;
-                        }
-                    }
-
-                    if (keyshareBytes) {
+                // If we have keyshare bytes, try to create the keyshare
+                if (keyshareBytes) {
+                    try {
                         const keyshare = Keyshare.fromBytes(keyshareBytes);
-                        debugLog("Successfully created keyshare from extracted binary data");
-
-                        // Get public key from keyshare
                         const publicKeyBytes = keyshare.publicKey();
-                        const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                        publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                        debugLog("Successfully created keyshare and extracted public key");
+                    } catch (keyshareError) {
+                        debugLog(`Keyshare creation failed: ${keyshareError.message}`);
+                        // Continue without keyshare creation
+                    }
+                }
 
-                        result = `=== DKLS Key Information (Binary) ===
+            } catch (decodeError) {
+                debugLog(`Keyshare decoding failed: ${decodeError.message}`);
+                // Continue without keyshare processing
+            }
+
+            if (publicKey) {
+                result = `=== DKLS Key Information ===
 
 Public Key: ${publicKey}
 
@@ -870,15 +806,11 @@ ${result}
 
 Note: Successfully extracted public key from DKLS keyshare data.
 `;
+            } else {
+                result += `
 
-                    } else {
-                        throw new Error("Could not find valid keyshare data in protobuf structure");
-                    }
-
-                } catch (binaryError) {
-                    debugLog(`Binary extraction failed: ${binaryError.message}`);
-                    throw new Error(`All keyshare decoding methods failed: ${hexError.message}, ${binaryError.message}`);
-                }
+Note: DKLS keyshare data found but could not extract public key with current WASM library.
+`;
             }
 
         } catch (wasmError) {
