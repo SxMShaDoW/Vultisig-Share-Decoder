@@ -1,10 +1,8 @@
 
-import (
-	"math"
-
 package dkls
 
 import (
+	"math"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
