@@ -183,12 +183,22 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 			log.Printf("Failed to unmarshal as protobuf: %v", err)
 			localStates, err = fileutils.GetLocalStateFromContent(decodedData)
 			if err != nil {
+				// Check if this error indicates a DKLS vault
+				if strings.Contains(err.Error(), "DKLS vault detected") {
+					log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
+					continue // Skip this file for GG20 processing
+				}
 				return "", fmt.Errorf("error processing file %d: %w", i, err)
 			}
 		} else {
 			log.Printf("Successfully unmarshalled as protobuf VaultContainer")
 			localStates, err = fileutils.GetLocalStateFromBakContent([]byte(contentStr), password, source)
 			if err != nil {
+				// Check if this error indicates a DKLS vault
+				if strings.Contains(err.Error(), "DKLS vault detected") {
+					log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
+					continue // Skip this file for GG20 processing
+				}
 				return "", fmt.Errorf("error processing vault container file %d: %w", i, err)
 			}
 		}
@@ -240,6 +250,16 @@ func ParseLocalState(content []byte) (map[types.TssKeyType]tss.LocalState, error
 		return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
 	}
 
+	// Check if this is a DKLS vault by looking for DKLS indicators
+	isDKLS := vault.ResharePrefix != "" || len(vault.KeyShares) > 0 && !isJSONString(vault.KeyShares[0].Keyshare)
+
+	if isDKLS {
+		// For DKLS vaults, we don't parse keyshares as JSON since they're in a different format
+		// Return an error to indicate this should be handled by DKLS processing instead
+		return nil, fmt.Errorf("DKLS vault detected - keyshares are not in JSON format")
+	}
+
+	// Handle GG20 format (original logic)
 	localStates := make(map[types.TssKeyType]tss.LocalState)
 	for _, keyshare := range vault.KeyShares {
 		var localState tss.LocalState
@@ -254,6 +274,12 @@ func ParseLocalState(content []byte) (map[types.TssKeyType]tss.LocalState, error
 	}
 
 	return localStates, nil
+}
+
+// isJSONString checks if a string is valid JSON
+func isJSONString(s string) bool {
+	var js json.RawMessage
+	return json.Unmarshal([]byte(s), &js) == nil
 }
 
 // ProcessGG20Files processes the original GG20 format files (existing functionality)
