@@ -1,0 +1,28 @@
+~/workspace$ ./dist/cli recover --scheme dkls --files TestDKLS1of2.vult --files TestDKLS2of2.vult
+Running in command-line mode
+Processing 2 files: [TestDKLS1of2.vult TestDKLS2of2.vult]
+Read file TestDKLS1of2.vult, content length: 157476 bytes
+Read file TestDKLS2of2.vult, content length: 157496 bytes
+Using DKLS scheme
+2025/05/26 20:47:58 ProcessDKLSFiles: Processing 2 DKLS files with threshold 2
+2025/05/26 20:47:58 Processing DKLS file 0: TestDKLS1of2.vult
+2025/05/26 20:47:58 ParseDKLSVault: Starting parse for 157476 bytes
+2025/05/26 20:47:58 ParseDKLSVault: Successfully decoded base64, new length: 118106
+2025/05/26 20:47:58 ParseDKLSVault: Found VaultContainer
+2025/05/26 20:47:58 ParseDKLSVault: Decoded inner vault, length: 88575
+2025/05/26 20:47:58 ParseDKLSVault: Successfully parsed vault 'Test Fast Vault DKLS' with 2 keyshares
+2025/05/26 20:47:58 DKLS keyshare data length: 87960 bytes
+2025/05/26 20:47:58 Processing DKLS file 1: TestDKLS2of2.vult
+2025/05/26 20:47:58 ParseDKLSVault: Starting parse for 157496 bytes
+2025/05/26 20:47:58 ParseDKLSVault: Successfully decoded base64, new length: 118122
+2025/05/26 20:47:58 ParseDKLSVault: Found VaultContainer
+2025/05/26 20:47:58 ParseDKLSVault: Decoded inner vault, length: 88586
+2025/05/26 20:47:58 ParseDKLSVault: Successfully parsed vault 'Test Fast Vault DKLS' with 2 keyshares
+2025/05/26 20:47:58 DKLS keyshare data length: 87960 bytes
+2025/05/26 20:47:58 Processing DKLS keys with threshold: 2, number of shares: 2
+2025/05/26 20:47:58 DKLS wrapper initialized with WASM library
+2025/05/26 20:47:58 Attempting native DKLS reconstruction with 2 shares
+2025/05/26 20:47:58 Processing raw share data of length: 87960 bytes
+2025/05/26 20:47:58 First 64 bytes of share data: 4141414141514141414141434167443074634d787a6b32302b506e6a56767148554143306762682f5a667a6d2f5a324f436355567631393979654c3478494a74
+2025/05/26 20:47:58 Share data as string preview: AAAAAQAAAAACAgD0tcMxzk20+PnjVvqHUAC0gbh/Zfzm/Z2OCcUVv199yeL4xIJtbSNAfP9FSYuUD1J1bDBW+hvLoMt/a6/CR46s
+2025/05/26 20:47:58 Found potential private key at offset 0
