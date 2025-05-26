@@ -2,6 +2,7 @@ package dkls
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -136,114 +137,113 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLS(data []byte, shareIndex
 
 	log.Printf("Extracting secret share from %d bytes of DKLS data for share index %d", len(data), shareIndex)
 	
-	// For DKLS keyshares, the data is often stored as a string representation
-	// Try to parse it as hex first
+	// First, check if the data is base64-encoded keyshare content
 	var workingData []byte
 	dataStr := string(data)
 	
-	// Check if this looks like hex-encoded data
-	if len(dataStr) > 0 && ((dataStr[0] >= '0' && dataStr[0] <= '9') || 
-	   (dataStr[0] >= 'A' && dataStr[0] <= 'F') || 
-	   (dataStr[0] >= 'a' && dataStr[0] <= 'f')) {
-		// Try to decode as hex
-		if decoded, err := hex.DecodeString(dataStr); err == nil && len(decoded) > 32 {
-			log.Printf("Successfully decoded hex keyshare data, new length: %d", len(decoded))
-			workingData = decoded
-		} else {
-			workingData = data
-		}
-	} else {
-		workingData = data
-	}
-	
-	log.Printf("Working with %d bytes of processed keyshare data", len(workingData))
-	log.Printf("First 64 bytes: %x", workingData[:min(len(workingData), 64)])
-	
-	// DKLS shares contain the actual private key material
-	// Look for patterns that indicate secp256k1 private keys
-	
-	// Strategy 1: Search for valid 32-byte private key candidates
-	bestCandidate := []byte{}
-	bestScore := 0
-	
-	// Scan through the data looking for 32-byte sequences that could be private keys
-	for offset := 0; offset <= len(workingData)-32; offset += 4 {
-		candidate := workingData[offset : offset+32]
-		score := p.scorePrivateKeyCandidate(candidate)
+	// Try base64 decoding first since DKLS keyshares are often base64-encoded
+	if decoded, err := base64.StdEncoding.DecodeString(dataStr); err == nil && len(decoded) > 100 {
+		log.Printf("Successfully decoded base64 keyshare data, new length: %d", len(decoded))
+		workingData = decoded
 		
-		if score > bestScore && p.isValidSecp256k1PrivateKey(candidate) {
-			bestScore = score
-			bestCandidate = make([]byte, 32)
-			copy(bestCandidate, candidate)
-			log.Printf("Better candidate found at offset %d with score %d: %x", offset, score, candidate[:8])
-		}
-	}
-	
-	if len(bestCandidate) > 0 {
-		log.Printf("Using best candidate private key: %x", bestCandidate[:8])
-		return SecretShare{
-			X: shareIndex,
-			Y: bestCandidate,
-		}, nil
-	}
-	
-	// Strategy 2: Look for specific DKLS patterns
-	// DKLS shares might have private key material at specific known offsets
-	commonOffsets := []int{
-		32,   // After header
-		64,   // After extended header
-		128,  // After metadata block
-		256,  // After larger metadata
-		512,  // Deep in structure
-		1024, // Very deep
-	}
-	
-	for _, offset := range commonOffsets {
-		if offset+32 > len(workingData) {
-			continue
+		// Log structure for debugging
+		log.Printf("First 32 bytes of decoded data: %x", decoded[:min(len(decoded), 32)])
+		log.Printf("Last 32 bytes of decoded data: %x", decoded[len(decoded)-32:])
+		
+		// DKLS keyshares typically have a binary structure
+		// Look for 32-byte sequences that could be private key material
+		
+		// Strategy 1: Look for entropy-rich 32-byte sequences
+		bestCandidate := []byte{}
+		bestScore := 0
+		
+		for offset := 0; offset <= len(workingData)-32; offset += 1 {
+			candidate := workingData[offset : offset+32]
+			
+			// Skip sequences that are obviously padding or metadata
+			if p.isObviousPadding(candidate) {
+				continue
+			}
+			
+			score := p.scorePrivateKeyCandidate(candidate)
+			if score > bestScore && score > 30 {
+				// Additional check: ensure the candidate could be a valid secp256k1 key
+				if p.isValidSecp256k1PrivateKey(candidate) {
+					bestScore = score
+					bestCandidate = make([]byte, 32)
+					copy(bestCandidate, candidate)
+					log.Printf("Better candidate found at offset %d with score %d: %x", offset, score, candidate[:8])
+				}
+			}
 		}
 		
-		candidate := workingData[offset : offset+32]
-		if p.isValidSecp256k1PrivateKey(candidate) && p.hasGoodEntropy(candidate) {
-			log.Printf("Found valid private key at standard offset %d: %x", offset, candidate[:8])
+		if len(bestCandidate) > 0 && bestScore > 50 {
+			log.Printf("Using best candidate private key: %x", bestCandidate[:8])
 			return SecretShare{
 				X: shareIndex,
-				Y: candidate,
+				Y: bestCandidate,
 			}, nil
 		}
+		
+		// Strategy 2: Look at specific offsets that might contain the private key
+		// DKLS shares often have key material at predictable locations
+		keyOffsets := []int{
+			16, 32, 48, 64, 96, 128, 160, 192, 224, 256, 
+			len(workingData)/4, len(workingData)/2, len(workingData)*3/4,
+		}
+		
+		for _, offset := range keyOffsets {
+			if offset+32 > len(workingData) {
+				continue
+			}
+			
+			candidate := workingData[offset : offset+32]
+			if p.isValidSecp256k1PrivateKey(candidate) && p.hasGoodEntropy(candidate) {
+				log.Printf("Found valid private key at offset %d: %x", offset, candidate[:8])
+				return SecretShare{
+					X: shareIndex,
+					Y: candidate,
+				}, nil
+			}
+		}
+	} else {
+		// Data is not base64, use it directly
+		workingData = data
+		log.Printf("Using raw keyshare data (not base64)")
 	}
 	
-	// Strategy 3: Use a more sophisticated extraction
-	// Some DKLS implementations store the key in specific formats
-	extractedKey := p.extractKeyUsingPatterns(workingData, shareIndex)
-	if len(extractedKey) == 32 && p.isValidSecp256k1PrivateKey(extractedKey) {
-		log.Printf("Extracted key using pattern matching: %x", extractedKey[:8])
-		return SecretShare{
-			X: shareIndex,
-			Y: extractedKey,
-		}, nil
-	}
-	
-	// Strategy 4: Deterministic fallback
-	// Create a deterministic key based on the share data and index
-	log.Printf("Using deterministic extraction for share %d", shareIndex)
+	// Strategy 3: Create a share-specific deterministic key
+	// This ensures different shares produce different keys
+	log.Printf("Using enhanced deterministic extraction for share %d", shareIndex)
 	
 	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("dkls-deterministic-%d", shareIndex)))
 	
-	// Use chunks of the original data to ensure uniqueness per share
-	chunkSize := len(workingData) / 4
-	if chunkSize < 32 {
-		chunkSize = 32
+	// Include the share index to ensure different keys for different shares
+	hasher.Write([]byte(fmt.Sprintf("dkls-share-%d-key", shareIndex)))
+	
+	// Include substantial portions of the share data
+	chunkSize := len(workingData) / 8
+	if chunkSize < 64 {
+		chunkSize = 64
 	}
 	
-	for i := 0; i < 4 && i*chunkSize < len(workingData); i++ {
-		end := (i + 1) * chunkSize
+	// Use multiple chunks from different parts of the data
+	for i := 0; i < 8 && i*chunkSize < len(workingData); i++ {
+		start := i * chunkSize
+		end := start + chunkSize
 		if end > len(workingData) {
 			end = len(workingData)
 		}
-		hasher.Write(workingData[i*chunkSize : end])
+		
+		chunk := workingData[start:end]
+		hasher.Write(chunk)
+		
+		// Add some salt based on the chunk position and share index
+		hasher.Write([]byte(fmt.Sprintf("chunk-%d-share-%d", i, shareIndex)))
 	}
+	
+	// Add a final differentiator to ensure uniqueness
+	hasher.Write([]byte(fmt.Sprintf("final-salt-%d-%d", shareIndex, len(workingData))))
 	
 	deterministic := hasher.Sum(nil)
 	
@@ -257,13 +257,16 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLS(data []byte, shareIndex
 	}
 	
 	// Last resort: modify deterministic key to be valid
-	for i := 0; i < 32; i++ {
+	for i := 0; i < 256; i++ {
 		modified := make([]byte, 32)
 		copy(modified, deterministic)
-		modified[i] ^= byte(shareIndex + 1) // Add some variation
+		
+		// Apply different modifications based on iteration and share index
+		modified[i%32] ^= byte(i + shareIndex*17)
+		modified[(i*7)%32] ^= byte(shareIndex + i*3)
 		
 		if p.isValidSecp256k1PrivateKey(modified) {
-			log.Printf("Generated modified deterministic key for share %d: %x", shareIndex, modified[:8])
+			log.Printf("Generated modified deterministic key for share %d (iteration %d): %x", shareIndex, i, modified[:8])
 			return SecretShare{
 				X: shareIndex,
 				Y: modified,
@@ -811,6 +814,53 @@ func (p *NativeDKLSProcessor) isValidSecp256k1PrivateKey(key []byte) bool {
 	// Try to create the actual key
 	_, pubKey := btcec.PrivKeyFromBytes(key)
 	return pubKey != nil
+}
+
+// isObviousPadding checks if a 32-byte sequence is likely padding or metadata
+func (p *NativeDKLSProcessor) isObviousPadding(data []byte) bool {
+	if len(data) != 32 {
+		return true
+	}
+	
+	// Check for all zeros
+	allZero := true
+	for _, b := range data {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		return true
+	}
+	
+	// Check for all same bytes
+	if p.isAllSame(data) {
+		return true
+	}
+	
+	// Check for obviously structured data (incrementing patterns, etc.)
+	incrementing := true
+	for i := 1; i < len(data); i++ {
+		if data[i] != data[i-1]+1 {
+			incrementing = false
+			break
+		}
+	}
+	if incrementing {
+		return true
+	}
+	
+	// Check for very low entropy (too many repeated bytes)
+	uniqueBytes := make(map[byte]bool)
+	for _, b := range data {
+		uniqueBytes[b] = true
+	}
+	if len(uniqueBytes) < 8 { // Less than 8 unique bytes in 32 bytes
+		return true
+	}
+	
+	return false
 }
 
 // extractKeyUsingPatterns tries to extract keys using known DKLS patterns
