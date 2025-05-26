@@ -390,6 +390,78 @@ async function checkBalance(ecdsaKey, eddsaKey) {
     }
 }
 
+// Simple protobuf-like parser for DKLS vaults
+function parseVaultFromBytes(bytes) {
+    try {
+        // Try to decode as base64 first
+        let decodedBytes;
+        try {
+            const contentStr = new TextDecoder().decode(bytes);
+            decodedBytes = new Uint8Array(atob(contentStr).split('').map(c => c.charCodeAt(0)));
+        } catch (e) {
+            decodedBytes = bytes;
+        }
+        
+        // Look for vault container structure (simplified protobuf parsing)
+        const content = new TextDecoder().decode(decodedBytes);
+        
+        // Extract vault data - look for base64 encoded inner vault
+        const vaultMatch = content.match(/[A-Za-z0-9+/]{100,}={0,2}/g);
+        if (!vaultMatch) {
+            throw new Error("No vault data found");
+        }
+        
+        // Decode inner vault
+        const innerVaultBytes = new Uint8Array(atob(vaultMatch[0]).split('').map(c => c.charCodeAt(0)));
+        const innerContent = new TextDecoder().decode(innerVaultBytes);
+        
+        // Extract key information using simple string parsing
+        const vault = {
+            name: extractField(innerContent, 'name') || 'Unknown',
+            localPartyId: extractField(innerContent, 'local_party_id') || 'party_0',
+            publicKeyEcdsa: extractField(innerContent, 'public_key_ecdsa') || '',
+            publicKeyEddsa: extractField(innerContent, 'public_key_eddsa') || '',
+            keyshares: []
+        };
+        
+        // Extract keyshare data - for DKLS this is binary data
+        const keyshareStart = innerContent.indexOf('keyshare');
+        if (keyshareStart !== -1) {
+            // Get the raw keyshare bytes starting after the keyshare field
+            const keyshareBytes = innerVaultBytes.slice(keyshareStart + 20); // Skip field header
+            vault.keyshares.push({
+                publicKey: vault.publicKeyEcdsa,
+                keyshare: keyshareBytes
+            });
+        }
+        
+        return vault;
+    } catch (error) {
+        throw new Error(`Failed to parse vault: ${error.message}`);
+    }
+}
+
+function extractField(content, fieldName) {
+    try {
+        // Simple field extraction - look for field patterns
+        const patterns = [
+            new RegExp(`${fieldName}[\\s\\S]{1,10}([A-Za-z0-9+/=]{10,})`, 'i'),
+            new RegExp(`"${fieldName}"\\s*:\\s*"([^"]+)"`, 'i'),
+            new RegExp(`${fieldName}\\x12([\\s\\S]{1,100})`, 'i')
+        ];
+        
+        for (const pattern of patterns) {
+            const match = content.match(pattern);
+            if (match && match[1]) {
+                return match[1].trim();
+            }
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
 async function processDKLSWithWASM(files, passwords, fileNames) {
     try {
         // Check if vs_wasm module is available
@@ -407,34 +479,23 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
             try {
                 debugLog(`Processing file ${i + 1}: ${fileNames[i]}`);
                 
-                // Try to parse as base64 first, then as raw bytes
-                let fileContent = files[i];
-                let contentStr = new TextDecoder().decode(fileContent);
+                const vault = parseVaultFromBytes(files[i]);
                 
-                // Check if it's base64 encoded
-                try {
-                    const base64Decoded = atob(contentStr);
-                    fileContent = new Uint8Array(base64Decoded.split('').map(c => c.charCodeAt(0)));
-                } catch (e) {
-                    // Not base64, use original content
-                }
-                
-                // For DKLS, we need to extract the keyshare data
-                // This is a simplified extraction - you may need to adjust based on your vault format
-                const shareData = Array.from(fileContent).map(b => b.toString(16).padStart(2, '0')).join('');
-                
-                dklsShares.push({
+                const shareData = {
                     id: `share_${i}`,
-                    shareData: shareData,
-                    partyId: `party_${i}`
-                });
+                    partyId: vault.localPartyId,
+                    vault: vault,
+                    keyshareData: vault.keyshares.length > 0 ? vault.keyshares[0].keyshare : null
+                };
                 
-                partyIds.push(`party_${i}`);
+                dklsShares.push(shareData);
+                partyIds.push(vault.localPartyId);
                 
-                debugLog(`Extracted DKLS share ${i + 1}, data length: ${shareData.length}`);
+                debugLog(`Extracted DKLS share ${i + 1}, data length: ${shareData.keyshareData ? shareData.keyshareData.length : 0}`);
                 
             } catch (parseError) {
                 debugLog(`Error parsing file ${fileNames[i]}: ${parseError.message}`);
+                throw parseError;
             }
         }
         
@@ -444,19 +505,39 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         
         debugLog(`Found ${dklsShares.length} DKLS shares, attempting key export...`);
         
-        // Use the vs_wasm KeyExportSession to reconstruct the key
-        const { KeyExportSession, Keyshare } = window.vsWasmModule;
-        
-        // For now, try with the first share to create a session
-        // This is a simplified approach - actual DKLS may require different handling
-        try {
-            // Convert the first share data back to bytes
-            const firstShareBytes = new Uint8Array(
-                dklsShares[0].shareData.match(/.{2}/g).map(byte => parseInt(byte, 16))
-            );
+        // Display detailed share information
+        let result = `=== DKLS Share Information ===
+
+Found ${dklsShares.length} DKLS shares:
+
+`;
+
+        for (let i = 0; i < dklsShares.length; i++) {
+            const share = dklsShares[i];
+            const vault = share.vault;
             
-            // Create a keyshare object (this may need adjustment based on your DKLS format)
-            const keyshare = Keyshare.fromBytes(firstShareBytes);
+            result += `
+Share ${i + 1} (${fileNames[i]}):
+  Party ID: ${share.partyId}
+  Share Data Length: ${share.keyshareData ? share.keyshareData.length : 0} bytes
+  Share Data Preview: ${share.keyshareData ? Array.from(share.keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('') : 'N/A'}...
+`;
+        }
+
+        // Try to use the vs_wasm module for key reconstruction
+        try {
+            const { KeyExportSession, Keyshare } = window.vsWasmModule;
+            
+            // Get the first share with keyshare data
+            const firstShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
+            if (!firstShare) {
+                throw new Error("No valid keyshare data found");
+            }
+            
+            debugLog(`Attempting to create Keyshare from ${firstShare.keyshareData.length} bytes`);
+            
+            // Try to create a keyshare object from the raw data
+            const keyshare = Keyshare.fromBytes(firstShare.keyshareData);
             
             // Create key export session
             const session = KeyExportSession.new(keyshare, partyIds);
@@ -473,49 +554,29 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
             const publicKeyBytes = keyshare.publicKey();
             const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
             
-            const result = `
-=== DKLS Key Reconstruction Successful! ===
+            result = `=== DKLS Key Reconstruction Successful! ===
 
 Private Key: ${privateKey}
 Public Key: ${publicKey}
 
-DKLS Shares Information:
-${dklsShares.map((share, i) => `
-Share ${i + 1}:
-  Party ID: ${share.partyId}
-  Share ID: ${share.id}
-  Share Data Length: ${share.shareData.length / 2} bytes
-`).join('')}
+${result}
 
 Note: DKLS key reconstruction completed using WASM library.
-            `;
-            
-            displayResults(result);
-            debugLog("DKLS key reconstruction completed successfully");
+`;
             
         } catch (wasmError) {
-            debugLog(`WASM processing error: ${wasmError.message}`);
+            debugLog(`WASM processing error: ${wasmError}`);
             
-            // Fallback: display share information without reconstruction
-            const result = `
-=== DKLS Share Information ===
+            result += `
 
-Found ${dklsShares.length} DKLS shares:
-
-${dklsShares.map((share, i) => `
-Share ${i + 1} (${fileNames[i]}):
-  Party ID: ${share.partyId}
-  Share Data Length: ${share.shareData.length / 2} bytes
-  Share Data Preview: ${share.shareData.substring(0, 64)}...
-`).join('')}
-
-Error: ${wasmError.message}
+Error: ${wasmError}
 
 Note: Key reconstruction failed, but share information is displayed above.
-            `;
-            
-            displayResults(result);
+`;
         }
+        
+        displayResults(result);
+        debugLog("DKLS processing completed");
         
     } catch (error) {
         debugLog(`DKLS processing failed: ${error.message}`);
