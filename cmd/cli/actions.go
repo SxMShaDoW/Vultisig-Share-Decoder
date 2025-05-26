@@ -195,11 +195,7 @@ func ProcessGG20Files(fileInfos []types.FileInfo, passwords []string, source typ
 	var allSecret []types.TempLocalState
 
 	for i, fileInfo := range fileInfos {
-		password := ""
-		if i < len(passwords) {
-			password = passwords[i]
-		}
-
+		// Note: passwords not currently used for GG20 parsing in shared.ParseLocalState
 		// Process as GG20 format
 		localStates, err := shared.ParseLocalState(fileInfo.Content)
 		if err != nil {
