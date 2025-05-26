@@ -118,6 +118,93 @@ window.toggleSection = toggleSection;
 window.checkBalance = checkBalance;
 window.copyToClipboard = copyToClipboard;
 
+async function processDKLSWithWASM(files, passwords, fileNames) {
+    if (!window.vsWasmModule) {
+        throw new Error("DKLS WASM module not available. Please reload the page.");
+    }
+
+    debugLog("Starting DKLS processing with vs_wasm...");
+    const { KeyExportSession, Keyshare } = window.vsWasmModule;
+    
+    if (files.length < 2) {
+        throw new Error("DKLS requires at least 2 keyshare files.");
+    }
+
+    try {
+        debugLog(`Processing ${files.length} DKLS files...`);
+        const keyshares = [];
+        const keyIds = [];
+
+        // Create Keyshare objects from the .vult files
+        for (let i = 0; i < files.length; i++) {
+            debugLog(`Processing file ${i + 1}: ${fileNames[i]}`);
+            
+            // Create Keyshare from raw file data
+            const keyshare = Keyshare.fromBytes(files[i]);
+            keyshares.push(keyshare);
+            
+            // Get the key ID for this keyshare
+            const keyId = keyshare.keyId();
+            // Convert keyId to string if it's not already
+            const keyIdStr = Array.from(keyId).map(b => b.toString(16).padStart(2, '0')).join('');
+            keyIds.push(keyIdStr);
+            
+            debugLog(`Created keyshare ${i + 1} with ID: ${keyIdStr}`);
+        }
+
+        debugLog("Creating KeyExportSession...");
+        // Create the export session with the first keyshare and all key IDs
+        const session = KeyExportSession.new(keyshares[0], keyIds);
+        
+        debugLog("Getting setup message...");
+        const setupMessage = session.setup;
+        debugLog(`Setup message length: ${setupMessage.length}`);
+
+        // Export shares from all keyshares (starting from the second one)
+        debugLog("Exporting shares...");
+        for (let i = 1; i < keyshares.length; i++) {
+            debugLog(`Exporting share ${i + 1}...`);
+            const message = KeyExportSession.exportShare(setupMessage, keyIds[i], keyshares[i]);
+            const messageBody = message.body;
+            debugLog(`Share ${i + 1} exported, message length: ${messageBody.length}`);
+            
+            // Input the message to the session
+            const isComplete = session.inputMessage(messageBody);
+            debugLog(`Message ${i + 1} processed, session complete: ${isComplete}`);
+        }
+
+        debugLog("Finishing session to extract private key...");
+        const privateKeyBytes = session.finish();
+        const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        debugLog("Getting public key...");
+        const publicKeyBytes = keyshares[0].publicKey();
+        const publicKeyHex = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        // Create results in the expected format
+        const results = `
+DKLS Key Recovery Results:
+=========================
+
+Private Key: ${privateKeyHex}
+Public Key: ${publicKeyHex}
+
+Share Details:
+${fileNames.map((name, i) => `Share ${i + 1}: ${name} (ID: ${keyIds[i]})`).join('\n')}
+
+Total shares processed: ${keyshares.length}
+Recovery successful: Yes
+        `.trim();
+
+        debugLog("DKLS processing completed successfully");
+        displayResults(results);
+
+    } catch (error) {
+        debugLog(`DKLS processing error: ${error.message}`);
+        throw new Error(`DKLS processing failed: ${error.message}`);
+    }
+}
+
 async function recoverKeys() {
     const fileGroups = document.querySelectorAll('.file-group');
     const files = [];

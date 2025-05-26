@@ -166,6 +166,10 @@ const KeyExportSessionFinalization = (typeof FinalizationRegistry === 'undefined
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_keyexportsession_free(ptr >>> 0, 1));
 
+const KeyshareFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_keyshare_free(ptr >>> 0, 1));
+
 export class KeyExportSession {
 
     static __wrap(ptr) {
