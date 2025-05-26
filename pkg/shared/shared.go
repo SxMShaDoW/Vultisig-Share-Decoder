@@ -82,7 +82,11 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 
 		// Get keyshare data - for DKLS, we need the raw keyshare content
 		if len(vault.KeyShares) > 0 {
+			// For DKLS, the keyshare is not JSON but raw binary data
 			shareData.ShareData = []byte(vault.KeyShares[0].Keyshare)
+			log.Printf("DKLS keyshare data length: %d bytes", len(shareData.ShareData))
+		} else {
+			log.Printf("Warning: No keyshares found in DKLS vault")
 		}
 
 		dklsShares = append(dklsShares, shareData)

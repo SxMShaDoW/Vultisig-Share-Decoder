@@ -6,6 +6,13 @@ import (
 	"main/pkg/dkls"
 )
 
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // ProcessDKLSKeys processes DKLS scheme keys
 func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []string, outputBuilder *strings.Builder) error {
 	fmt.Fprintf(outputBuilder, "\n=== DKLS Key Processing ===\n")
@@ -24,21 +31,19 @@ func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []
 		return fmt.Errorf("share validation failed: %w", err)
 	}
 
-	// Export the key using DKLS
-	response, err := dklsWrapper.ExportKey(dklsShares, partyIDs, threshold)
-	if err != nil {
-		return fmt.Errorf("failed to export DKLS key: %w", err)
+	// For now, display the DKLS share information since we don't have the WASM library integrated
+	fmt.Fprintf(outputBuilder, "DKLS Shares Information:\n")
+	for i, share := range dklsShares {
+		fmt.Fprintf(outputBuilder, "Share %d:\n", i+1)
+		fmt.Fprintf(outputBuilder, "  Party ID: %s\n", share.PartyID)
+		fmt.Fprintf(outputBuilder, "  Share ID: %s\n", share.ID)
+		fmt.Fprintf(outputBuilder, "  Share Data: %x\n", share.ShareData[:min(len(share.ShareData), 64)]) // Show first 64 bytes
+		fmt.Fprintf(outputBuilder, "  Share Data Length: %d bytes\n\n", len(share.ShareData))
 	}
 
-	if !response.Success {
-		return fmt.Errorf("DKLS key export failed: %s", response.Error)
-	}
-
-	fmt.Fprintf(outputBuilder, "DKLS Key Export Successful!\n")
-	fmt.Fprintf(outputBuilder, "Private Key: %x\n", response.PrivateKey)
-	fmt.Fprintf(outputBuilder, "Public Key: %x\n", response.PublicKey)
-	fmt.Fprintf(outputBuilder, "\nNote: DKLS processing is currently using placeholder implementation.\n")
-	fmt.Fprintf(outputBuilder, "Full implementation requires integration with the actual DKLS WASM library.\n")
+	fmt.Fprintf(outputBuilder, "\nNote: DKLS key reconstruction requires the DKLS WASM library.\n")
+	fmt.Fprintf(outputBuilder, "Currently displaying share information only.\n")
+	fmt.Fprintf(outputBuilder, "To complete DKLS key recovery, integrate the actual DKLS WASM library.\n")
 
 	return nil
 }
