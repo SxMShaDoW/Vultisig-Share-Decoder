@@ -393,52 +393,171 @@ async function checkBalance(ecdsaKey, eddsaKey) {
 // Simple protobuf-like parser for DKLS vaults
 function parseVaultFromBytes(bytes) {
     try {
-        // Try to decode as base64 first
-        let decodedBytes;
+        debugLog(`Parsing vault from ${bytes.length} bytes`);
+        
+        // Try to decode as base64 first if it looks like base64
+        let workingBytes = bytes;
         try {
             const contentStr = new TextDecoder().decode(bytes);
-            decodedBytes = new Uint8Array(atob(contentStr).split('').map(c => c.charCodeAt(0)));
+            if (/^[A-Za-z0-9+/]+=*$/.test(contentStr.trim())) {
+                workingBytes = new Uint8Array(atob(contentStr.trim()).split('').map(c => c.charCodeAt(0)));
+                debugLog(`Decoded base64 content, new length: ${workingBytes.length}`);
+            }
         } catch (e) {
-            decodedBytes = bytes;
+            debugLog("Not base64 encoded, using raw bytes");
         }
         
-        // Look for vault container structure (simplified protobuf parsing)
-        const content = new TextDecoder().decode(decodedBytes);
-        
-        // Extract vault data - look for base64 encoded inner vault
-        const vaultMatch = content.match(/[A-Za-z0-9+/]{100,}={0,2}/g);
-        if (!vaultMatch) {
-            throw new Error("No vault data found");
-        }
-        
-        // Decode inner vault
-        const innerVaultBytes = new Uint8Array(atob(vaultMatch[0]).split('').map(c => c.charCodeAt(0)));
-        const innerContent = new TextDecoder().decode(innerVaultBytes);
-        
-        // Extract key information using simple string parsing
-        const vault = {
-            name: extractField(innerContent, 'name') || 'Unknown',
-            localPartyId: extractField(innerContent, 'local_party_id') || 'party_0',
-            publicKeyEcdsa: extractField(innerContent, 'public_key_ecdsa') || '',
-            publicKeyEddsa: extractField(innerContent, 'public_key_eddsa') || '',
-            keyshares: []
-        };
-        
-        // Extract keyshare data - for DKLS this is binary data
-        const keyshareStart = innerContent.indexOf('keyshare');
-        if (keyshareStart !== -1) {
-            // Get the raw keyshare bytes starting after the keyshare field
-            const keyshareBytes = innerVaultBytes.slice(keyshareStart + 20); // Skip field header
-            vault.keyshares.push({
-                publicKey: vault.publicKeyEcdsa,
-                keyshare: keyshareBytes
-            });
-        }
+        // Parse as protobuf vault container first
+        const vault = parseProtobufVault(workingBytes);
         
         return vault;
     } catch (error) {
         throw new Error(`Failed to parse vault: ${error.message}`);
     }
+}
+
+function parseProtobufVault(bytes) {
+    let offset = 0;
+    const vault = {
+        name: '',
+        localPartyId: 'party_0',
+        publicKeyEcdsa: '',
+        publicKeyEddsa: '',
+        keyshares: []
+    };
+    
+    // Simple protobuf parser - look for known field patterns
+    while (offset < bytes.length - 10) {
+        const fieldHeader = bytes[offset];
+        const wireType = fieldHeader & 0x07;
+        const fieldNumber = fieldHeader >>> 3;
+        
+        offset++;
+        
+        if (wireType === 2) { // Length-delimited (strings, bytes)
+            const length = readVarint(bytes, offset);
+            offset += getVarintLength(bytes, offset);
+            
+            if (length.value > 0 && length.value < bytes.length && offset + length.value <= bytes.length) {
+                const fieldData = bytes.slice(offset, offset + length.value);
+                
+                // Try to decode as string first
+                try {
+                    const stringValue = new TextDecoder().decode(fieldData);
+                    
+                    // Identify fields by content patterns
+                    if (stringValue.includes('vault') || stringValue.includes('DKLS') || stringValue.includes('Fast')) {
+                        vault.name = stringValue;
+                        debugLog(`Found vault name: ${vault.name}`);
+                    } else if (stringValue.startsWith('party_') || stringValue === 'party_0' || stringValue === 'party_1') {
+                        vault.localPartyId = stringValue;
+                        debugLog(`Found party ID: ${vault.localPartyId}`);
+                    } else if (stringValue.length === 66 && /^[0-9a-fA-F]+$/.test(stringValue)) {
+                        // Looks like a hex public key
+                        if (!vault.publicKeyEcdsa) {
+                            vault.publicKeyEcdsa = stringValue;
+                            debugLog(`Found ECDSA public key: ${stringValue.substring(0, 20)}...`);
+                        } else if (!vault.publicKeyEddsa) {
+                            vault.publicKeyEddsa = stringValue;
+                            debugLog(`Found EdDSA public key: ${stringValue.substring(0, 20)}...`);
+                        }
+                    } else if (fieldData.length > 100) {
+                        // Large binary data - likely keyshare
+                        vault.keyshares.push({
+                            publicKey: vault.publicKeyEcdsa,
+                            keyshare: fieldData
+                        });
+                        debugLog(`Found keyshare data: ${fieldData.length} bytes`);
+                    }
+                } catch (e) {
+                    // Not a string, might be binary keyshare data
+                    if (fieldData.length > 100) {
+                        vault.keyshares.push({
+                            publicKey: vault.publicKeyEcdsa,
+                            keyshare: fieldData
+                        });
+                        debugLog(`Found binary keyshare data: ${fieldData.length} bytes`);
+                    }
+                }
+                
+                offset += length.value;
+            } else {
+                offset++;
+            }
+        } else {
+            // Skip other wire types
+            offset++;
+        }
+    }
+    
+    // If we still don't have keyshare data, try a different approach
+    if (vault.keyshares.length === 0) {
+        // Look for large chunks of data that could be keyshares
+        const potentialKeyshares = findLargeDataChunks(bytes, 1000); // At least 1000 bytes
+        for (const chunk of potentialKeyshares) {
+            vault.keyshares.push({
+                publicKey: vault.publicKeyEcdsa,
+                keyshare: chunk
+            });
+            debugLog(`Found potential keyshare chunk: ${chunk.length} bytes`);
+        }
+    }
+    
+    return vault;
+}
+
+function readVarint(bytes, offset) {
+    let value = 0;
+    let shift = 0;
+    let byte;
+    let bytesRead = 0;
+    
+    do {
+        if (offset + bytesRead >= bytes.length) break;
+        byte = bytes[offset + bytesRead];
+        value |= (byte & 0x7F) << shift;
+        shift += 7;
+        bytesRead++;
+    } while ((byte & 0x80) !== 0 && bytesRead < 5);
+    
+    return { value, bytesRead };
+}
+
+function getVarintLength(bytes, offset) {
+    let length = 0;
+    let byte;
+    
+    do {
+        if (offset + length >= bytes.length) break;
+        byte = bytes[offset + length];
+        length++;
+    } while ((byte & 0x80) !== 0 && length < 5);
+    
+    return length;
+}
+
+function findLargeDataChunks(bytes, minSize) {
+    const chunks = [];
+    let currentChunk = [];
+    
+    for (let i = 0; i < bytes.length; i++) {
+        // Look for sequences of non-zero bytes that might be keyshare data
+        if (bytes[i] !== 0) {
+            currentChunk.push(bytes[i]);
+        } else {
+            if (currentChunk.length >= minSize) {
+                chunks.push(new Uint8Array(currentChunk));
+            }
+            currentChunk = [];
+        }
+    }
+    
+    // Check final chunk
+    if (currentChunk.length >= minSize) {
+        chunks.push(new Uint8Array(currentChunk));
+    }
+    
+    return chunks;
 }
 
 function extractField(content, fieldName) {
