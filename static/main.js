@@ -142,49 +142,25 @@ function parseVaultFromBytes(fileData) {
         debugLog("Not base64 encoded, using raw data");
     }
     
-    // Simple protobuf-like parsing to extract keyshare data
-    // Look for the keyshare field in the vault structure
-    let offset = 0;
+    // Parse the protobuf vault structure to find keyshare data
     let keyshareData = null;
     
-    while (offset < vaultData.length - 10) {
-        // Look for length-delimited fields (wire type 2)
-        const fieldHeader = vaultData[offset];
-        const wireType = fieldHeader & 0x07;
+    // First, find the keyshares array in the vault
+    const keyshareField = findProtobufField(vaultData, 4); // Assuming keyshares is field 4
+    if (keyshareField) {
+        debugLog(`Found keyshares field, length: ${keyshareField.length}`);
         
-        if (wireType === 2) { // Length-delimited field
-            offset++;
-            
-            // Read varint length
-            let length = 0;
-            let shift = 0;
-            let lengthBytes = 0;
-            
-            while (offset < vaultData.length && lengthBytes < 5) {
-                const byte = vaultData[offset++];
-                lengthBytes++;
-                length |= (byte & 0x7F) << shift;
-                if ((byte & 0x80) === 0) break;
-                shift += 7;
-            }
-            
-            // If this looks like keyshare data (reasonable size and starts with expected patterns)
-            if (length > 1000 && length < vaultData.length && offset + length <= vaultData.length) {
-                const potentialKeyshare = vaultData.slice(offset, offset + length);
-                
-                // Check if this could be keyshare data
-                // DKLS keyshares often start with certain patterns or have specific structures
-                if (potentialKeyshare.length > 1000) {
-                    keyshareData = potentialKeyshare;
-                    debugLog(`Found potential keyshare data at offset ${offset - lengthBytes - 1}, length: ${length}`);
-                    break;
-                }
-            }
-            
-            offset += length;
-        } else {
-            offset++;
+        // Parse the keyshare message to find the actual keyshare bytes
+        const keyshareBytes = findKeyshareBytes(keyshareField);
+        if (keyshareBytes) {
+            keyshareData = keyshareBytes;
+            debugLog(`Extracted actual keyshare bytes, length: ${keyshareData.length}`);
         }
+    }
+    
+    // Fallback: try to find keyshare data using pattern matching
+    if (!keyshareData) {
+        keyshareData = findKeyshareDataFallback(vaultData);
     }
     
     if (!keyshareData) {
@@ -192,6 +168,185 @@ function parseVaultFromBytes(fileData) {
     }
     
     return keyshareData;
+}
+
+// Helper function to find a specific protobuf field
+function findProtobufField(data, fieldNumber) {
+    let offset = 0;
+    
+    while (offset < data.length - 10) {
+        const fieldHeader = data[offset];
+        const wireType = fieldHeader & 0x07;
+        const currentFieldNumber = fieldHeader >>> 3;
+        
+        offset++;
+        
+        if (wireType === 2) { // Length-delimited field
+            const lengthInfo = readVarint(data, offset);
+            offset += lengthInfo.bytesRead;
+            
+            if (currentFieldNumber === fieldNumber && lengthInfo.value > 0 && 
+                offset + lengthInfo.value <= data.length) {
+                return data.slice(offset, offset + lengthInfo.value);
+            }
+            
+            offset += lengthInfo.value;
+        } else {
+            // Skip other wire types
+            offset++;
+        }
+    }
+    
+    return null;
+}
+
+// Helper function to extract actual keyshare bytes from keyshare protobuf message
+function findKeyshareBytes(keyshareMessage) {
+    let offset = 0;
+    
+    while (offset < keyshareMessage.length - 10) {
+        const fieldHeader = keyshareMessage[offset];
+        const wireType = fieldHeader & 0x07;
+        const fieldNumber = fieldHeader >>> 3;
+        
+        offset++;
+        
+        if (wireType === 2) { // Length-delimited field
+            const lengthInfo = readVarint(keyshareMessage, offset);
+            offset += lengthInfo.bytesRead;
+            
+            if (lengthInfo.value > 1000 && lengthInfo.value < 50000 && 
+                offset + lengthInfo.value <= keyshareMessage.length) {
+                
+                const fieldData = keyshareMessage.slice(offset, offset + lengthInfo.value);
+                
+                // Check if this looks like actual keyshare bytes (not string data)
+                if (isLikelyKeyshareBytes(fieldData)) {
+                    debugLog(`Found keyshare bytes at field ${fieldNumber}, length: ${lengthInfo.value}`);
+                    return fieldData;
+                }
+            }
+            
+            offset += lengthInfo.value;
+        } else {
+            offset++;
+        }
+    }
+    
+    return null;
+}
+
+// Helper function to read protobuf varint
+function readVarint(data, offset) {
+    let value = 0;
+    let shift = 0;
+    let bytesRead = 0;
+    
+    while (offset + bytesRead < data.length && bytesRead < 5) {
+        const byte = data[offset + bytesRead];
+        bytesRead++;
+        value |= (byte & 0x7F) << shift;
+        if ((byte & 0x80) === 0) break;
+        shift += 7;
+    }
+    
+    return { value, bytesRead };
+}
+
+// Helper function to check if data looks like keyshare bytes
+function isLikelyKeyshareBytes(data) {
+    if (data.length < 1000) return false;
+    
+    // Check entropy - keyshare data should have good entropy
+    const uniqueBytes = new Set(data.slice(0, 256));
+    if (uniqueBytes.size < 100) return false; // Low entropy
+    
+    // Check if it's not obviously text data
+    let textLikeCount = 0;
+    for (let i = 0; i < Math.min(100, data.length); i++) {
+        const byte = data[i];
+        if ((byte >= 32 && byte <= 126) || byte === 10 || byte === 13) {
+            textLikeCount++;
+        }
+    }
+    
+    // If more than 80% looks like text, it's probably not keyshare bytes
+    return textLikeCount / Math.min(100, data.length) < 0.8;
+}
+
+// Fallback function to find keyshare data using pattern matching
+function findKeyshareDataFallback(vaultData) {
+    debugLog("Using fallback keyshare detection");
+    
+    let offset = 0;
+    let bestCandidate = null;
+    let bestScore = 0;
+    
+    while (offset < vaultData.length - 10) {
+        const fieldHeader = vaultData[offset];
+        const wireType = fieldHeader & 0x07;
+        
+        if (wireType === 2) { // Length-delimited field
+            offset++;
+            
+            const lengthInfo = readVarint(vaultData, offset);
+            offset += lengthInfo.bytesRead;
+            
+            if (lengthInfo.value > 1000 && lengthInfo.value < 100000 && 
+                offset + lengthInfo.value <= vaultData.length) {
+                
+                const candidate = vaultData.slice(offset, offset + lengthInfo.value);
+                const score = scoreKeyshareCandidate(candidate);
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestCandidate = candidate;
+                    debugLog(`New best keyshare candidate, score: ${score}, length: ${lengthInfo.value}`);
+                }
+            }
+            
+            offset += lengthInfo.value;
+        } else {
+            offset++;
+        }
+    }
+    
+    return bestCandidate;
+}
+
+// Score a potential keyshare candidate
+function scoreKeyshareCandidate(data) {
+    let score = 0;
+    
+    // Size scoring
+    if (data.length > 5000 && data.length < 50000) score += 20;
+    if (data.length > 10000 && data.length < 30000) score += 10;
+    
+    // Entropy scoring
+    const uniqueBytes = new Set(data.slice(0, 1000));
+    if (uniqueBytes.size > 200) score += 30;
+    if (uniqueBytes.size > 150) score += 10;
+    
+    // Not text data
+    let textBytes = 0;
+    for (let i = 0; i < Math.min(500, data.length); i++) {
+        const byte = data[i];
+        if ((byte >= 32 && byte <= 126) || byte === 10 || byte === 13) {
+            textBytes++;
+        }
+    }
+    const textRatio = textBytes / Math.min(500, data.length);
+    if (textRatio < 0.3) score += 20;
+    if (textRatio < 0.5) score += 10;
+    
+    // Binary patterns that suggest cryptographic data
+    let nullBytes = 0;
+    for (let i = 0; i < Math.min(100, data.length); i++) {
+        if (data[i] === 0) nullBytes++;
+    }
+    if (nullBytes < 10) score += 10; // Some nulls are okay, too many suggest padding
+    
+    return score;
 }
 
 async function processDKLSWithWASM(files, passwords, fileNames) {
