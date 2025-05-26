@@ -2,7 +2,7 @@ entrypoint = "main.go"
 # run = "make cli && ./cli/cli-recover recover --files honeypot.bak"
 # run = "make cli && ./cli/cli-recover recover --files Test-part1of2.vult --files Test-part2of2.vult"
 run = "make all && ./dist/webserver"
-modules = ["go-1.21"]
+modules = ["go-1.21", "nodejs-20"]
 
 
 [env]

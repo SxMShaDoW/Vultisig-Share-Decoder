@@ -96,6 +96,7 @@ func ProcessFilesContent(files []string, passwords []string, source types.InputS
 
 func RecoverAction(cCtx *cli.Context) error {
 	files := cCtx.StringSlice("files")
+	scheme := cCtx.String("scheme")
 	// Create a slice of empty strings for passwords
 	passwords := make([]string, len(files))
 	source := types.CommandLine
@@ -116,10 +117,26 @@ func RecoverAction(cCtx *cli.Context) error {
 		})
 	}
 
-	// Use shared processing function which handles scheme detection
-	output, err := shared.ProcessFileContent(fileInfos, passwords, source)
+	var output string
+	var err error
+
+	// Handle scheme selection
+	switch scheme {
+	case "dkls":
+		fmt.Println("Using DKLS scheme")
+		output, err = ProcessDKLSFiles(fileInfos, passwords, source)
+	case "gg20":
+		fmt.Println("Using GG20 scheme")
+		output, err = ProcessGG20Files(fileInfos, passwords, source)
+	case "auto":
+		fmt.Println("Auto-detecting scheme")
+		output, err = shared.ProcessFileContent(fileInfos, passwords, source)
+	default:
+		return fmt.Errorf("unsupported scheme: %s (supported: auto, gg20, dkls)", scheme)
+	}
+
 	if err != nil {
-		return fmt.Errorf("error in ProcessFileContent: %w", err)
+		return fmt.Errorf("error processing files: %w", err)
 	}
 
 	// If running in CLI mode, print to console
