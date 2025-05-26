@@ -6,6 +6,7 @@ package main
 import (
     "log"
     "net/http"
+    "strings"
 )
 
 func enableCORS(next http.Handler) http.Handler {
@@ -24,8 +25,18 @@ func enableCORS(next http.Handler) http.Handler {
 }
 
 func startServer() {
+    // Create a custom file server that handles WASM MIME types
     fs := http.FileServer(http.Dir("static"))
-    http.Handle("/", enableCORS(fs))
+    
+    // Wrap with MIME type handler
+    handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if strings.HasSuffix(r.URL.Path, ".wasm") {
+            w.Header().Set("Content-Type", "application/wasm")
+        }
+        fs.ServeHTTP(w, r)
+    })
+    
+    http.Handle("/", enableCORS(handler))
 
     log.Print("Listening on :8080...")
     err := http.ListenAndServe(":8080", nil)
