@@ -204,11 +204,12 @@ func ParseVault(content []byte) (map[types.TssKeyType]tss.LocalState, error) {
 			return nil, fmt.Errorf("failed to decode inner vault: %w", err)
 		}
 
-		if err := proto.Unmarshal(vaultData, vault); err != nil {
+		var innerVault v1.Vault
+		if err := proto.Unmarshal(vaultData, &innerVault); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal inner vault: %w", err)
 		}
 
-		return extractLocalStates(vault)
+		return extractLocalStates(&innerVault)
 	}
 
 	// Try JSON parsing
