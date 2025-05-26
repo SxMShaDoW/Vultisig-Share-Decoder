@@ -12,12 +12,37 @@ function debugLog(message) {
     debugOutput.innerHTML += `${timestamp}: ${message}\n`;
 }
 
-// Initialize WASM
+// Initialize WASM modules
 const go = new Go();
-WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+
+// Initialize main.wasm (Go WASM)
+const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
     .then((result) => {
         go.run(result.instance);
-        debugLog("WASM initialized successfully");
+        debugLog("Main WASM initialized successfully");
+        return result;
+    });
+
+// Initialize vs_wasm_bg.wasm (additional WASM module)
+const initVsWasm = fetch("vs_wasm_bg.wasm")
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Failed to fetch vs_wasm_bg.wasm: ${response.statusText}`);
+        }
+        return response.arrayBuffer();
+    })
+    .then(bytes => WebAssembly.instantiate(bytes))
+    .then((result) => {
+        debugLog("vs_wasm initialized successfully");
+        // Store the vs_wasm instance globally if needed
+        window.vsWasmInstance = result.instance;
+        return result;
+    });
+
+// Wait for both WASM modules to initialize
+Promise.all([initMainWasm, initVsWasm])
+    .then(() => {
+        debugLog("All WASM modules initialized successfully");
         hideLoader();
     })
     .catch(err => {
