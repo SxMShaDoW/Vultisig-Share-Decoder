@@ -104,6 +104,14 @@ function removeFileInput(id) {
     }
 }
 
+// Make functions globally available for HTML onclick handlers
+window.addFileInput = addFileInput;
+window.removeFileInput = removeFileInput;
+window.recoverKeys = recoverKeys;
+window.toggleSection = toggleSection;
+window.checkBalance = checkBalance;
+window.copyToClipboard = copyToClipboard;
+
 async function recoverKeys() {
     const fileGroups = document.querySelectorAll('.file-group');
     const files = [];
