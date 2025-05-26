@@ -165,7 +165,7 @@ func GetLocalStateFromBakContent(content []byte, password string, source types.I
 		if err := proto.Unmarshal(vaultData, &v); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
 		}
-		localStates, err = ParseVault(&v)
+		localStates, err = extractLocalStates(&v)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse vault: %w", err)
 		}
