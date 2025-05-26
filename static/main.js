@@ -674,43 +674,42 @@ Share ${i + 1} (${fileNames[i]}):
             // Try different approaches to decode the keyshare data
             let keyshareBytes = null;
             
-            // Approach 1: Try direct binary data (skip protobuf headers)
+            // Approach 1: Try as hex-encoded string first (most likely based on logs)
             try {
-                // Look for the actual keyshare data by skipping protobuf field headers
-                let offset = 0;
-                const data = validShare.keyshareData;
+                const keyshareStr = new TextDecoder().decode(validShare.keyshareData);
+                debugLog(`Decoded keyshare as string: ${keyshareStr.substring(0, 100)}...`);
                 
-                // Skip protobuf headers and find the largest data chunk
-                while (offset < data.length - 100) {
-                    const fieldHeader = data[offset];
-                    const wireType = fieldHeader & 0x07;
+                // Check if it's hex-encoded
+                if (/^[0-9a-fA-F\s]+$/.test(keyshareStr.trim())) {
+                    const hexStr = keyshareStr.replace(/\s/g, '').trim();
+                    debugLog(`Detected hex string, length: ${hexStr.length}`);
                     
-                    if (wireType === 2) { // Length-delimited
-                        offset++;
-                        const lengthResult = readVarint(data, offset);
-                        offset += getVarintLength(data, offset);
-                        
-                        if (lengthResult.value > 1000 && lengthResult.value < data.length && offset + lengthResult.value <= data.length) {
-                            // This might be the actual keyshare data
-                            keyshareBytes = data.slice(offset, offset + lengthResult.value);
-                            debugLog(`Found potential keyshare at offset ${offset}, length ${lengthResult.value}`);
-                            break;
-                        }
-                        offset += lengthResult.value;
+                    // Convert hex to bytes
+                    const hexBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                    debugLog(`Converted to bytes: ${hexBytes.length} bytes`);
+                    
+                    // Check if the hex-decoded data is base64
+                    const hexString = new TextDecoder().decode(hexBytes);
+                    debugLog(`Hex-decoded string preview: ${hexString.substring(0, 50)}...`);
+                    
+                    if (/^[A-Za-z0-9+/]+=*$/.test(hexString.trim())) {
+                        debugLog("Detected base64 inside hex encoding, decoding...");
+                        const base64Bytes = new Uint8Array(atob(hexString.trim()).split('').map(c => c.charCodeAt(0)));
+                        keyshareBytes = base64Bytes;
+                        debugLog(`Final keyshare bytes: ${keyshareBytes.length} bytes`);
                     } else {
-                        offset++;
+                        keyshareBytes = hexBytes;
+                        debugLog(`Using hex-decoded bytes directly: ${keyshareBytes.length} bytes`);
                     }
-                }
-                
-                if (keyshareBytes) {
+                    
                     const keyshare = Keyshare.fromBytes(keyshareBytes);
-                    debugLog("Successfully created keyshare from extracted binary data");
+                    debugLog("Successfully created keyshare from hex/base64 decoded data");
                     
                     // Get public key from keyshare
                     const publicKeyBytes = keyshare.publicKey();
                     const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
                     
-                    result = `=== DKLS Key Information (Partial) ===
+                    result = `=== DKLS Key Information (Decoded) ===
 
 Public Key: ${publicKey}
 
@@ -720,40 +719,64 @@ Note: Successfully extracted public key from DKLS keyshare data.
 `;
                     
                 } else {
-                    throw new Error("Could not find valid keyshare data in protobuf structure");
+                    throw new Error("Data is not valid hex format");
                 }
                 
-            } catch (binaryError) {
-                debugLog(`Binary extraction failed: ${binaryError.message}`);
+            } catch (hexError) {
+                debugLog(`Hex decoding failed: ${hexError.message}`);
                 
-                // Approach 2: Try as hex-encoded string
+                // Approach 2: Try direct binary data (skip protobuf headers)
                 try {
-                    const keyshareStr = new TextDecoder().decode(validShare.keyshareData);
-                    if (/^[0-9a-fA-F\s]+$/.test(keyshareStr.trim())) {
-                        const hexStr = keyshareStr.replace(/\s/g, '').trim();
-                        keyshareBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                        debugLog(`Trying hex decode: ${keyshareBytes.length} bytes`);
+                    // Look for the actual keyshare data by skipping protobuf field headers
+                    let offset = 0;
+                    const data = validShare.keyshareData;
+                    
+                    // Skip protobuf headers and find the largest data chunk
+                    while (offset < data.length - 100) {
+                        const fieldHeader = data[offset];
+                        const wireType = fieldHeader & 0x07;
                         
+                        if (wireType === 2) { // Length-delimited
+                            offset++;
+                            const lengthResult = readVarint(data, offset);
+                            offset += getVarintLength(data, offset);
+                            
+                            if (lengthResult.value > 1000 && lengthResult.value < data.length && offset + lengthResult.value <= data.length) {
+                                // This might be the actual keyshare data
+                                keyshareBytes = data.slice(offset, offset + lengthResult.value);
+                                debugLog(`Found potential keyshare at offset ${offset}, length ${lengthResult.value}`);
+                                break;
+                            }
+                            offset += lengthResult.value;
+                        } else {
+                            offset++;
+                        }
+                    }
+                    
+                    if (keyshareBytes) {
                         const keyshare = Keyshare.fromBytes(keyshareBytes);
+                        debugLog("Successfully created keyshare from extracted binary data");
+                        
+                        // Get public key from keyshare
                         const publicKeyBytes = keyshare.publicKey();
                         const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
                         
-                        result = `=== DKLS Key Information (Hex Decoded) ===
+                        result = `=== DKLS Key Information (Binary) ===
 
 Public Key: ${publicKey}
 
 ${result}
 
-Note: Successfully extracted public key using hex decoding.
+Note: Successfully extracted public key from DKLS keyshare data.
 `;
                         
                     } else {
-                        throw new Error("Data is not valid hex format");
+                        throw new Error("Could not find valid keyshare data in protobuf structure");
                     }
                     
-                } catch (hexError) {
-                    debugLog(`Hex decoding failed: ${hexError.message}`);
-                    throw new Error(`All keyshare decoding methods failed: ${binaryError.message}, ${hexError.message}`);
+                } catch (binaryError) {
+                    debugLog(`Binary extraction failed: ${binaryError.message}`);
+                    throw new Error(`All keyshare decoding methods failed: ${hexError.message}, ${binaryError.message}`);
                 }
             }
             
