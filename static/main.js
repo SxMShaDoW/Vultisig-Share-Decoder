@@ -28,7 +28,7 @@ const initVsWasm = (async () => {
     try {
         debugLog("Starting vs_wasm module import...");
         
-        // Import the vs_wasm module
+        // Import the vs_wasm module as ES6 module
         const vsWasmModule = await import('./vs_wasm.js');
         debugLog("vs_wasm module imported successfully");
         
@@ -37,13 +37,20 @@ const initVsWasm = (async () => {
         await vsWasmModule.default('./vs_wasm_bg.wasm');
         debugLog("vs_wasm WASM binary initialized successfully");
         
+        // Verify classes are available
+        if (!vsWasmModule.Keyshare || !vsWasmModule.KeyExportSession) {
+            throw new Error("Required WASM classes (Keyshare, KeyExportSession) not found in module");
+        }
+        
         // Set up the module classes
         window.vsWasmModule = {
             Keyshare: vsWasmModule.Keyshare,
-            KeyExportSession: vsWasmModule.KeyExportSession
+            KeyExportSession: vsWasmModule.KeyExportSession,
+            Message: vsWasmModule.Message
         };
         
         debugLog("vs_wasm classes configured successfully");
+        debugLog(`Available classes: ${Object.keys(window.vsWasmModule).join(', ')}`);
         return window.vsWasmModule;
     } catch (error) {
         debugLog(`vs_wasm initialization failed: ${error.message}`);
@@ -126,6 +133,10 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
     debugLog("Starting DKLS processing with vs_wasm...");
     const { KeyExportSession, Keyshare } = window.vsWasmModule;
     
+    if (!Keyshare || !KeyExportSession) {
+        throw new Error("WASM classes not properly initialized");
+    }
+    
     if (files.length < 2) {
         throw new Error("DKLS requires at least 2 keyshare files.");
     }
@@ -138,51 +149,105 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         // Create Keyshare objects from the .vult files
         for (let i = 0; i < files.length; i++) {
             debugLog(`Processing file ${i + 1}: ${fileNames[i]}`);
+            debugLog(`File size: ${files[i].length} bytes`);
+            debugLog(`First 32 bytes: ${Array.from(files[i].slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
             
-            // Create Keyshare from raw file data
-            const keyshare = Keyshare.fromBytes(files[i]);
-            keyshares.push(keyshare);
-            
-            // Get the key ID for this keyshare
-            const keyId = keyshare.keyId();
-            // Convert keyId to string if it's not already
-            const keyIdStr = Array.from(keyId).map(b => b.toString(16).padStart(2, '0')).join('');
-            keyIds.push(keyIdStr);
-            
-            debugLog(`Created keyshare ${i + 1} with ID: ${keyIdStr}`);
+            try {
+                // Create Keyshare from raw file data
+                debugLog(`Attempting to create Keyshare from file ${i + 1}...`);
+                const keyshare = Keyshare.fromBytes(files[i]);
+                
+                if (!keyshare) {
+                    throw new Error(`Keyshare.fromBytes returned null/undefined for file ${i + 1}`);
+                }
+                
+                keyshares.push(keyshare);
+                debugLog(`Successfully created keyshare ${i + 1}`);
+                
+                // Get the key ID for this keyshare
+                debugLog(`Getting key ID for keyshare ${i + 1}...`);
+                const keyId = keyshare.keyId();
+                
+                if (!keyId) {
+                    throw new Error(`keyId() returned null/undefined for keyshare ${i + 1}`);
+                }
+                
+                // Convert keyId to string
+                let keyIdStr;
+                if (keyId instanceof Uint8Array) {
+                    keyIdStr = Array.from(keyId).map(b => b.toString(16).padStart(2, '0')).join('');
+                } else if (typeof keyId === 'string') {
+                    keyIdStr = keyId;
+                } else {
+                    keyIdStr = String(keyId);
+                }
+                
+                keyIds.push(keyIdStr);
+                debugLog(`Created keyshare ${i + 1} with ID: ${keyIdStr}`);
+                
+            } catch (keyshareError) {
+                debugLog(`Error creating keyshare from file ${i + 1}: ${keyshareError.message || keyshareError}`);
+                throw new Error(`Failed to create keyshare from file ${fileNames[i]}: ${keyshareError.message || keyshareError}`);
+            }
         }
 
+        if (keyshares.length === 0) {
+            throw new Error("No valid keyshares were created");
+        }
+
+        debugLog(`Successfully created ${keyshares.length} keyshares`);
         debugLog("Creating KeyExportSession...");
-        // Create the export session with the first keyshare and all key IDs
-        const session = KeyExportSession.new(keyshares[0], keyIds);
         
-        debugLog("Getting setup message...");
-        const setupMessage = session.setup;
-        debugLog(`Setup message length: ${setupMessage.length}`);
-
-        // Export shares from all keyshares (starting from the second one)
-        debugLog("Exporting shares...");
-        for (let i = 1; i < keyshares.length; i++) {
-            debugLog(`Exporting share ${i + 1}...`);
-            const message = KeyExportSession.exportShare(setupMessage, keyIds[i], keyshares[i]);
-            const messageBody = message.body;
-            debugLog(`Share ${i + 1} exported, message length: ${messageBody.length}`);
+        try {
+            // Create the export session with the first keyshare and all key IDs
+            const session = KeyExportSession.new(keyshares[0], keyIds);
             
-            // Input the message to the session
-            const isComplete = session.inputMessage(messageBody);
-            debugLog(`Message ${i + 1} processed, session complete: ${isComplete}`);
-        }
+            if (!session) {
+                throw new Error("KeyExportSession.new returned null/undefined");
+            }
+            
+            debugLog("Getting setup message...");
+            const setupMessage = session.setup;
+            
+            if (!setupMessage) {
+                throw new Error("session.setup returned null/undefined");
+            }
+            
+            debugLog(`Setup message length: ${setupMessage.length}`);
 
-        debugLog("Finishing session to extract private key...");
-        const privateKeyBytes = session.finish();
-        const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        
-        debugLog("Getting public key...");
-        const publicKeyBytes = keyshares[0].publicKey();
-        const publicKeyHex = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+            // Export shares from all keyshares (starting from the second one)
+            debugLog("Exporting shares...");
+            for (let i = 1; i < keyshares.length; i++) {
+                debugLog(`Exporting share ${i + 1}...`);
+                const message = KeyExportSession.exportShare(setupMessage, keyIds[i], keyshares[i]);
+                
+                if (!message || !message.body) {
+                    throw new Error(`exportShare failed for share ${i + 1}`);
+                }
+                
+                const messageBody = message.body;
+                debugLog(`Share ${i + 1} exported, message length: ${messageBody.length}`);
+                
+                // Input the message to the session
+                const isComplete = session.inputMessage(messageBody);
+                debugLog(`Message ${i + 1} processed, session complete: ${isComplete}`);
+            }
 
-        // Create results in the expected format
-        const results = `
+            debugLog("Finishing session to extract private key...");
+            const privateKeyBytes = session.finish();
+            
+            if (!privateKeyBytes) {
+                throw new Error("session.finish() returned null/undefined");
+            }
+            
+            const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            debugLog("Getting public key...");
+            const publicKeyBytes = keyshares[0].publicKey();
+            const publicKeyHex = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+            // Create results in the expected format
+            const results = `
 DKLS Key Recovery Results:
 =========================
 
@@ -194,14 +259,20 @@ ${fileNames.map((name, i) => `Share ${i + 1}: ${name} (ID: ${keyIds[i]})`).join(
 
 Total shares processed: ${keyshares.length}
 Recovery successful: Yes
-        `.trim();
+            `.trim();
 
-        debugLog("DKLS processing completed successfully");
-        displayResults(results);
+            debugLog("DKLS processing completed successfully");
+            displayResults(results);
+            
+        } catch (sessionError) {
+            debugLog(`Error in key export session: ${sessionError.message || sessionError}`);
+            throw new Error(`Key export session failed: ${sessionError.message || sessionError}`);
+        }
 
     } catch (error) {
-        debugLog(`DKLS processing error: ${error.message}`);
-        throw new Error(`DKLS processing failed: ${error.message}`);
+        const errorMsg = error.message || error || "Unknown error";
+        debugLog(`DKLS processing error: ${errorMsg}`);
+        throw new Error(`DKLS processing failed: ${errorMsg}`);
     }
 }
 
