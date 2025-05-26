@@ -1,26 +1,22 @@
+
 //go:build wasm
 // +build wasm
 
 package main
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
+	"log"
+	"os"
+	"io"
 	"syscall/js"
-
-	"github.com/golang/protobuf/proto"
+	
+	"google.golang.org/protobuf/proto"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
-)
-
-import (
-    "log"
-    "syscall/js"
-    "os"
-    "io"
-    "main/pkg/types"
-    "main/pkg/shared"
+	"main/pkg/types"
+	"main/pkg/shared"
 )
 
 func main() {
@@ -70,8 +66,74 @@ func main() {
         return result
     }))
 
+    // Add vault decryption function
+    js.Global().Set("DecryptVault", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+        if len(args) < 2 {
+            return "Error: DecryptVault requires base64 vault data and password"
+        }
+
+        base64Data := args[0].String()
+        password := args[1].String()
+
+        // Decode base64
+        vaultData, err := base64.StdEncoding.DecodeString(base64Data)
+        if err != nil {
+            return "Error decoding base64: " + err.Error()
+        }
+
+        // Decrypt with AES-GCM
+        decryptedData, err := decryptWithAesGcm(vaultData, password)
+        if err != nil {
+            return "Error decrypting vault: " + err.Error()
+        }
+
+        // Parse protobuf
+        vault := &v1.Vault{}
+        if err := proto.Unmarshal(decryptedData, vault); err != nil {
+            return "Error parsing protobuf: " + err.Error()
+        }
+
+        // Return formatted vault info
+        return formatVaultInfo(vault)
+    }))
+
     log.Println("WASM initialization complete, waiting for JS calls...")
     <-c
+}
+
+func decryptWithAesGcm(data []byte, password string) ([]byte, error) {
+    key := []byte(password)
+    if len(key) < 32 {
+        // Pad key to 32 bytes
+        padded := make([]byte, 32)
+        copy(padded, key)
+        key = padded
+    } else if len(key) > 32 {
+        key = key[:32]
+    }
+
+    block, err := aes.NewCipher(key)
+    if err != nil {
+        return nil, err
+    }
+
+    gcm, err := cipher.NewGCM(block)
+    if err != nil {
+        return nil, err
+    }
+
+    nonceSize := gcm.NonceSize()
+    if len(data) < nonceSize {
+        return nil, err
+    }
+
+    nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+    plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+    if err != nil {
+        return nil, err
+    }
+
+    return plaintext, nil
 }
 
 func formatVaultInfo(vault *v1.Vault) map[string]interface{} {
@@ -89,16 +151,6 @@ func formatVaultInfo(vault *v1.Vault) map[string]interface{} {
 		schemeType = "DKLS"
 	}
 
-	// Check if keyshares are JSON (GG20) or binary (DKLS)
-	if len(vault.KeyShares) > 0 {
-		keyshareData := vault.KeyShares[0].Keyshare
-		var js interface{}
-		if json.Unmarshal([]byte(keyshareData), &js) != nil {
-			// If JSON unmarshal fails, likely DKLS
-			schemeType = "DKLS"
-		}
-	}
-
 	return map[string]interface{}{
 		"name":            vault.Name,
 		"publicKeyEcdsa":  vault.PublicKeyEcdsa,
@@ -110,4 +162,11 @@ func formatVaultInfo(vault *v1.Vault) map[string]interface{} {
 		"schemeType":      schemeType,
 		"type":           "vault",
 	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
