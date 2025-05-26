@@ -69,13 +69,13 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 		log.Printf("Processing DKLS file %d: %s", i, fileInfo.Name)
 
 		// Parse the vault from the file content
-		vault, shareData, err := ParseDKLSVault(fileInfo.Content)
+		vault, _, err := ParseDKLSVault(fileInfo.Content)
 		if err != nil {
 			return fmt.Errorf("failed to parse DKLS vault from file %s: %w", fileInfo.Name, err)
 		}
 
 		// Extract DKLS share data from vault
-		shareData = dkls.DKLSShareData{
+		shareData := dkls.DKLSShareData{
 			ID:      vault.LocalPartyId,
 			PartyID: vault.LocalPartyId,
 		}
