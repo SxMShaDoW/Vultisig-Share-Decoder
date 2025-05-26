@@ -1,59 +1,105 @@
-// Debug logging function
+let fileGroupCounter = 1;
+
+function hideLoader() {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    debugLog("UI initialized and ready");
+}
+
 function debugLog(message) {
-    console.log(`[DEBUG] ${message}`);
-    const debugOutput = document.getElementById('debug-output');
-    if (debugOutput) {
-        debugOutput.innerHTML += `${message}<br>`;
-        debugOutput.scrollTop = debugOutput.scrollHeight;
-    }
+    const debugOutput = document.getElementById('debugOutput');
+    const timestamp = new Date().toISOString();
+    debugOutput.innerHTML += `${timestamp}: ${message}\n`;
 }
 
-function displayResults(results) {
-    const output = document.getElementById('output');
-    if (output) {
-        output.innerHTML = `<pre>${results}</pre>`;
-        debugLog("Results displayed successfully");
-    }
-}
+// Initialize WASM modules
+const go = new Go();
 
-function toggleSection(sectionId) {
-    const section = document.getElementById(sectionId);
-    if (section) {
-        section.style.display = section.style.display === 'none' ? 'block' : 'none';
-    }
-}
-
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        debugLog("Copied to clipboard");
-    }).catch(err => {
-        debugLog("Failed to copy: " + err);
+// Initialize main.wasm (Go WASM)
+const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+    .then((result) => {
+        go.run(result.instance);
+        debugLog("Main WASM initialized successfully");
+        return result;
     });
-}
 
-function checkBalance() {
-    debugLog("Balance check functionality not implemented yet");
-}
+// Initialize vs_wasm_bg.wasm (additional WASM module)
+const initVsWasm = (async () => {
+    try {
+        debugLog("Starting vs_wasm module import...");
 
-let fileInputCounter = 0;
+        // Import the vs_wasm module
+        const vsWasmModule = await import('./vs_wasm.js');
+        debugLog("vs_wasm module imported successfully");
+
+        // Initialize the WASM module with proper path
+        debugLog("Initializing WASM binary...");
+        await vsWasmModule.default('./vs_wasm_bg.wasm');
+        debugLog("vs_wasm WASM binary initialized successfully");
+
+        // Set up the module classes
+        window.vsWasmModule = {
+            Keyshare: vsWasmModule.Keyshare,
+            KeyExportSession: vsWasmModule.KeyExportSession
+        };
+
+        debugLog("vs_wasm classes configured successfully");
+        return window.vsWasmModule;
+    } catch (error) {
+        debugLog(`vs_wasm initialization failed: ${error.message}`);
+        debugLog(`Error stack: ${error.stack}`);
+        debugLog("Note: vs_wasm is optional for DKLS processing");
+        return null;
+    }
+})();
+
+// Wait for both WASM modules to initialize
+Promise.all([initMainWasm, initVsWasm])
+    .then((results) => {
+        const [mainResult, vsResult] = results;
+        if (mainResult) {
+            debugLog("Main WASM module initialized successfully");
+        }
+        if (vsResult) {
+            debugLog("vs_wasm module initialized successfully");
+        } else {
+            debugLog("vs_wasm module failed to initialize - continuing without it");
+        }
+        debugLog("Application initialization complete");
+        hideLoader();
+    })
+    .catch(err => {
+        debugLog(`WASM initialization error: ${err}`);
+        // Try to continue with just the main WASM module
+        initMainWasm.then(() => {
+            debugLog("Continuing with main WASM only");
+            hideLoader();
+        }).catch(mainErr => {
+            debugLog(`Critical error - main WASM failed: ${mainErr}`);
+            document.querySelector('.loader-container').innerHTML = 
+                `<div style="color: var(--error-color);">Error loading application: ${mainErr}</div>`;
+        });
+    });
 
 function addFileInput() {
-    fileInputCounter++;
-    const container = document.getElementById('file-inputs-container');
-    const fileGroup = document.createElement('div');
-    fileGroup.className = 'file-group';
-    fileGroup.id = `fileGroup${fileInputCounter}`;
+    const container = document.getElementById('fileInputs');
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'file-group';
+    groupDiv.id = `fileGroup${fileGroupCounter}`;
 
-    fileGroup.innerHTML = `
-        <div class="file-input-wrapper">
-            <input type="file" class="file-input" accept=".vult,.bak,.dat" />
-            <input type="password" class="password-input" placeholder="Password (if encrypted)" />
-            <button type="button" onclick="removeFileInput(${fileInputCounter})">Remove</button>
+    groupDiv.innerHTML = `
+        <div class="input-wrapper">
+            <input type="file" accept=".bak,.vult" class="file-input" />
+            <input type="password" placeholder="Password (optional)" class="password-input" />
         </div>
+        <button class="btn remove-file-btn" onclick="removeFileInput(${fileGroupCounter})">
+            <span class="btn-icon">×</span>
+        </button>
     `;
 
-    container.appendChild(fileGroup);
-    debugLog(`Added file input group ${fileInputCounter}`);
+    container.appendChild(groupDiv);
+    fileGroupCounter++;
+    debugLog(`Added new file input group ${fileGroupCounter}`);
 }
 
 function removeFileInput(id) {
@@ -64,120 +110,13 @@ function removeFileInput(id) {
     }
 }
 
-function extractField(content, fieldName) {
-    try {
-        // Simple field extraction - look for field patterns
-        const patterns = [
-            new RegExp(`${fieldName}[\\s\\S]{1,10}([A-Za-z0-9+/=]{10,})`, 'i'),
-            new RegExp(`"${fieldName}"\\s*:\\s*"([^"]+)"`, 'i'),
-            new RegExp(`${fieldName}\\x12([\\s\\S]{1,100})`, 'i')
-        ];
-
-        for (const pattern of patterns) {
-            const match = content.match(pattern);
-            if (match && match[1]) {
-                return match[1].trim();
-            }
-        }
-        return null;
-    } catch (e) {
-        return null;
-    }
-}
-
-function parseVaultFromBytes(fileBytes) {
-    try {
-        // Convert bytes to string for parsing
-        const content = new TextDecoder().decode(fileBytes);
-
-        // Try to parse as JSON first
-        try {
-            return JSON.parse(content);
-        } catch (e) {
-            debugLog("Not a JSON file, trying binary parsing...");
-        }
-
-        // For binary vault files, extract key fields
-        const vault = {
-            name: extractField(content, "name") || "Unknown",
-            localPartyId: extractField(content, "localPartyId") || extractField(content, "local_party_id") || "unknown",
-            publicKeyEcdsa: extractField(content, "publicKeyEcdsa") || extractField(content, "public_key_ecdsa") || "",
-            publicKeyEddsa: extractField(content, "publicKeyEddsa") || extractField(content, "public_key_eddsa") || "",
-            keyShares: []
-        };
-
-        debugLog(`Parsed vault: ${vault.name}, Party: ${vault.localPartyId}`);
-        return vault;
-    } catch (error) {
-        debugLog(`Error parsing vault: ${error.message}`);
-        throw new Error(`Failed to parse vault: ${error.message}`);
-    }
-}
-
-async function processDKLSWithWASM(files, passwords, fileNames) {
-    try {
-        // Check if vs_wasm module is available
-        if (!window.vsWasmModule) {
-            throw new Error("DKLS WASM module not available. Please reload the page.");
-        }
-
-        debugLog("DKLS WASM module available, processing shares...");
-
-        // Parse the vault files to extract DKLS shares
-        const dklsShares = [];
-        const partyIds = [];
-
-        for (let i = 0; i < files.length; i++) {
-            try {
-                debugLog(`Processing file ${i + 1}: ${fileNames[i]}`);
-
-                const vault = parseVaultFromBytes(files[i]);
-
-                // Extract DKLS share information
-                const shareData = {
-                    id: vault.localPartyId,
-                    partyId: vault.localPartyId,
-                    shareData: files[i] // Use raw file data
-                };
-
-                dklsShares.push(shareData);
-                partyIds.push(vault.localPartyId);
-
-                debugLog(`Added DKLS share for party: ${vault.localPartyId}`);
-            } catch (error) {
-                debugLog(`Error processing file ${fileNames[i]}: ${error.message}`);
-                throw error;
-            }
-        }
-
-        if (dklsShares.length === 0) {
-            throw new Error("No valid DKLS shares found");
-        }
-
-        debugLog(`Found ${dklsShares.length} DKLS shares, attempting reconstruction...`);
-
-        // Use WASM module for key reconstruction
-        try {
-            const result = await window.vsWasmModule.exportKey(dklsShares, partyIds, dklsShares.length);
-
-            if (result && result.success) {
-                let output = "=== DKLS Key Reconstruction Successful! ===\n\n";
-                output += `Private Key: ${result.privateKey}\n`;
-                output += `Public Key: ${result.publicKey}\n`;
-                displayResults(output);
-            } else {
-                throw new Error(result ? result.error : "Unknown WASM error");
-            }
-        } catch (wasmError) {
-            debugLog(`WASM reconstruction failed: ${wasmError.message}`);
-            throw new Error(`DKLS reconstruction failed: ${wasmError.message}`);
-        }
-
-    } catch (error) {
-        displayResults(`DKLS Error: ${error.message}`);
-        debugLog(`Error in processDKLSWithWASM: ${error.message}`);
-    }
-}
+// Make functions globally available for HTML onclick handlers
+window.addFileInput = addFileInput;
+window.removeFileInput = removeFileInput;
+window.recoverKeys = recoverKeys;
+window.toggleSection = toggleSection;
+window.checkBalance = checkBalance;
+window.copyToClipboard = copyToClipboard;
 
 async function recoverKeys() {
     const fileGroups = document.querySelectorAll('.file-group');
@@ -200,7 +139,7 @@ async function recoverKeys() {
                 const fileData = await file.arrayBuffer();
                 files.push(new Uint8Array(fileData));
                 passwords.push(passwordInput.value || "");
-                fileNames.push(file.name);
+                fileNames.push(file.name); // Store the filename
             }
         }
 
@@ -208,8 +147,6 @@ async function recoverKeys() {
             debugLog("Please select at least one file to process.");
             return;
         }
-
-        debugLog(`Processing ${files.length} files: ${fileNames.join(', ')}`);
 
         // Check which scheme is selected
         const selectedScheme = document.querySelector('input[name="scheme"]:checked').value;
@@ -235,27 +172,750 @@ async function recoverKeys() {
     }
 }
 
-// Make functions globally available for HTML onclick handlers
-window.addFileInput = addFileInput;
-window.removeFileInput = removeFileInput;
-window.recoverKeys = recoverKeys;
-window.toggleSection = toggleSection;
-window.checkBalance = checkBalance;
-window.copyToClipboard = copyToClipboard;
+function parseOutput(rawOutput) {
+    const decoded = {
+        PrivateKeys: {},
+        Addresses: {},
+        WIFPrivateKeys: {},
+        ShareDetails: '',
+        PublicKeyECDSA: '',
+        PublicKeyEDDSA: '',
+        RawOutput: rawOutput
+    };
 
-// Initialize the page
-document.addEventListener('DOMContentLoaded', function() {
-    debugLog("Page loaded, initializing...");
+    // Split the output into lines
+    const lines = rawOutput.split('\n');
+    let currentChain = '';
 
-    // Add initial file input
-    addFileInput();
+    for (const line of lines) {
+        const trimmedLine = line.trim();
 
-    // Check if WASM modules are loading
-    if (typeof Go !== 'undefined') {
-        debugLog("Go WASM support detected");
+        // Parse backup details
+        if (trimmedLine.startsWith('Backup name:') || 
+            trimmedLine.startsWith('This Share:') || 
+            trimmedLine.startsWith('All Shares:')) {
+            decoded.ShareDetails += trimmedLine + '\n';
+        }
+
+        // Parse Public Keys
+        if (trimmedLine.startsWith('Public Key(ECDSA):')) {
+            decoded.PublicKeyECDSA = trimmedLine.split(':')[1].trim();
+        } else if (trimmedLine.startsWith('Public Key(EdDSA):')) {
+            decoded.PublicKeyEDDSA = trimmedLine.split(':')[1].trim();
+        }
+
+        // Track current chain context
+        if (trimmedLine.startsWith('Recovering') && trimmedLine.endsWith('key....')) {
+            currentChain = trimmedLine
+                .replace('Recovering ', '')
+                .replace(' key....', '')
+                .trim();
+        }
+
+        // Parse WIF private keys
+        if (trimmedLine.startsWith('WIF private key for')) {
+            const parts = trimmedLine.lastIndexOf(':');
+            if (parts !== -1) {
+                const chainFull = trimmedLine
+                    .substring('WIF private key for '.length, parts)
+                    .trim()
+                    .toLowerCase();
+                const privateKey = trimmedLine.substring(parts + 1).trim();
+                decoded.WIFPrivateKeys[chainFull] = privateKey;
+            }
+            continue;
+        }
+
+        // Parse private keys
+        if (trimmedLine.startsWith('hex encoded private key for') || 
+            trimmedLine.startsWith('hex encoded non-hardened private key for')) {
+            const parts = trimmedLine.split(':');
+            if (parts.length === 2) {
+                let chain;
+                if (trimmedLine.startsWith('hex encoded private key for')) {
+                    chain = trimmedLine
+                        .replace('hex encoded private key for ', '')
+                        .split(':')[0]
+                        .trim()
+                        .toLowerCase();
+                } else if (trimmedLine.startsWith('hex encoded non-hardened private key for')) {
+                    chain = trimmedLine
+                        .replace('hex encoded non-hardened private key for ', '')
+                        .split(':')[0]
+                        .trim()
+                        .toLowerCase();
+                }
+                decoded.PrivateKeys[chain] = parts[1].trim();
+            }
+        }
+
+        // Parse addresses
+        if (trimmedLine.startsWith('address:')) {
+            if (currentChain) {
+                decoded.Addresses[currentChain] = trimmedLine.split(':')[1].trim();
+            }
+        }
+
+        // Store ethereum address specifically
+        if (trimmedLine.startsWith('ethereum address:')) {
+            decoded.Addresses['ethereum'] = trimmedLine.split(':')[1].trim();
+        }
     }
 
-    if (window.vsWasmModule) {
-        debugLog("DKLS WASM module detected");
+    return decoded;
+}
+
+// Function to display the parsed results
+function displayResults(result) {
+    const resultDiv = document.getElementById('results');
+    resultDiv.innerHTML = ''; // Clear previous results
+
+    if (typeof result === 'string' && result.toLowerCase().includes('error')) {
+        resultDiv.innerHTML = `<div class="error-message">${result}</div>`;
+        debugLog(`Error in results: ${result}`);
+        return;
     }
-});
+
+    function addCopyButton(text) {
+        return `<span class="copy-icon" onclick="copyToClipboard('${text.replace(/'/g, "\\'")}', event)">📋</span>`;
+    }
+
+    const parsed = parseOutput(result);
+
+    // Create results HTML
+    let html = `
+        <h2>Results</h2>
+        <div class="result-section">
+            <h3>Share Details</h3>
+            <pre>${parsed.ShareDetails}</pre>
+        </div>`;
+
+    if (parsed.PublicKeyECDSA || parsed.PublicKeyEDDSA) {
+        html += `
+            <div class="result-section">
+                <h3>Public Keys</h3>
+                ${parsed.PublicKeyECDSA ? `<pre>ECDSA: ${parsed.PublicKeyECDSA}</pre>` : ''}
+                ${parsed.PublicKeyEDDSA ? `<pre>EdDSA: ${parsed.PublicKeyEDDSA} </pre>` : ''}
+                <button class="btn check-balance-btn" onclick="checkBalance('${parsed.PublicKeyECDSA}', '${parsed.PublicKeyEDDSA}')">
+                    Check Airdrop Balance
+                </button>
+                <pre id="balanceDisplay"></pre>
+            </div>`;
+    }
+
+    if (Object.keys(parsed.WIFPrivateKeys).length > 0) {
+        html += `
+            <div class="result-section">
+                <h3>WIF Private Keys</h3>
+                ${Object.entries(parsed.WIFPrivateKeys)
+                    .map(([chain, key]) => `
+                        <div class="copy-wrapper">
+                            <pre>${chain}:${key} ${addCopyButton(key)}</pre>
+                        </div>`)
+                    .join('')}
+            </div>`;
+    }
+    if (Object.keys(parsed.PrivateKeys).length > 0) {
+        html += `
+            <div class="result-section">
+                <h3>Private Keys</h3>
+                ${Object.entries(parsed.PrivateKeys)
+                    .map(([chain, key]) => `
+                        <div class="copy-wrapper">
+                            <pre>${chain}: ${key} ${addCopyButton(key)}</pre>
+                        </div>`)
+                    .join('')}
+            </div>`;
+    }
+    if (Object.keys(parsed.Addresses).length > 0) {
+        html += `
+            <div class="result-section">
+                <h3>Addresses</h3>
+                ${Object.entries(parsed.Addresses)
+                    .map(([chain, address]) => `
+                        <div class="copy-wrapper">
+                            <pre>${chain}: ${address} ${addCopyButton(address)}</pre>
+                        </div>`)
+                    .join('')}
+            </div>`;
+    }
+
+    html += `
+    <div class="result-section">
+        <h3 class="toggle-header" onclick="toggleSection('rawOutput')">
+        Full Output <span class="toggle-arrow">▼</span> 
+        </h3>
+        <div class="content" id="rawOutput"">
+            <pre class="debug-output">${parsed.RawOutput}</pre>
+        </div>
+    </div>`
+
+    resultDiv.innerHTML = html;
+    debugLog('Results displayed successfully');
+}
+
+function toggleSection(sectionId) {
+    const content = document.getElementById(sectionId);
+    const arrow = content.previousElementSibling.querySelector('.toggle-arrow');
+
+    if (content.style.display === "block") {
+        content.style.display = "none";
+        arrow.style.transform = "rotate(0deg)";
+    } else {
+        content.style.display = "block";
+        arrow.style.transform = "rotate(180deg)";
+    }
+}
+
+async function checkBalance(ecdsaKey, eddsaKey) {
+    const display = document.getElementById('balanceDisplay');
+    const button = event.target;
+
+    try {
+        // Show loading state
+        button.disabled = true;
+        button.textContent = 'Checking...';
+        display.style.display = 'block';
+        display.textContent = 'Fetching balance...';
+
+        const response = await fetch(`https://airdrop.vultisig.com/api/vault/${ecdsaKey}/${eddsaKey}`);
+        const data = await response.json();
+
+        // Show result with animation
+        if (!data || data.balance === undefined) {
+            display.textContent = 'Not registered for the airdrop. Sign up for the airdrop here: https://airdrop.vultisig.com/';
+        } else {
+            display.textContent = `Airdrop Balance: ${data.balance}`;
+        }
+        display.classList.add('show');
+    } catch (error) {
+        display.textContent = 'Error fetching balance';
+    } finally {
+        // Reset button
+        button.disabled = false;
+        button.textContent = 'Check Airdrop Balance';
+    }
+}
+
+// Simple protobuf-like parser for DKLS vaults
+function parseVaultFromBytes(bytes) {
+    try {
+        debugLog(`Parsing vault from ${bytes.length} bytes`);
+
+        // Try to decode as base64 first if it looks like base64
+        let workingBytes = bytes;
+        try {
+            const contentStr = new TextDecoder().decode(bytes);
+            if (/^[A-Za-z0-9+/]+=*$/.test(contentStr.trim())) {
+                workingBytes = new Uint8Array(atob(contentStr.trim()).split('').map(c => c.charCodeAt(0)));
+                debugLog(`Decoded base64 content, new length: ${workingBytes.length}`);
+            }
+        } catch (e) {
+            debugLog("Not base64 encoded, using raw bytes");
+        }
+
+        // Parse as protobuf vault container first
+        const vault = parseProtobufVault(workingBytes);
+
+        return vault;
+    } catch (error) {
+        throw new Error(`Failed to parse vault: ${error.message}`);
+    }
+}
+
+// Parse varint from protobuf
+function parseVarint(bytes, offset) {
+    let result = 0;
+    let shift = 0;
+    let currentOffset = offset;
+
+    while (currentOffset < bytes.length) {
+        const byte = bytes[currentOffset];
+        result |= (byte & 0x7F) << shift;
+        currentOffset++;
+
+        if ((byte & 0x80) === 0) {
+            // If this is the first call (parsing field header)
+            if (shift === 0) {
+                const fieldNumber = result >>> 3;
+                const wireType = result & 0x07;
+                return [fieldNumber, wireType, currentOffset];
+            } else {
+                // This is parsing a length or value
+                return [result, currentOffset];
+            }
+        }
+
+        shift += 7;
+        if (shift >= 64) {
+            throw new Error('Varint too long');
+        }
+    }
+
+    throw new Error('Incomplete varint');
+}
+
+// Skip a protobuf field based on wire type
+function skipField(bytes, offset, wireType) {
+    switch (wireType) {
+        case 0: // Varint
+            while (offset < bytes.length && (bytes[offset] & 0x80) !== 0) {
+                offset++;
+            }
+            return offset + 1;
+
+        case 1: // 64-bit
+            return offset + 8;
+
+        case 2: // Length-delimited
+            const [length, newOffset] = parseVarint(bytes, offset);
+            return newOffset + length;
+
+        case 5: // 32-bit
+            return offset + 4;
+
+        default:
+            throw new Error(`Unknown wire type: ${wireType}`);
+    }
+}
+
+function parseProtobufVault(bytes) {
+    debugLog(`Parsing protobuf vault from ${bytes.length} bytes`);
+
+    let offset = 0;
+    const vault = {
+        name: '',
+        publicKeyEcdsa: '',
+        publicKeyEddsa: '',
+        signers: [],
+        keyShares: [],
+        localPartyId: '',
+        resharePrefix: '',
+        libType: null
+    };
+
+    while (offset < bytes.length) {
+        if (offset >= bytes.length) break;
+
+        const [fieldNumber, wireType, newOffset] = parseVarint(bytes, offset);
+        offset = newOffset;
+
+        debugLog(`Field ${fieldNumber}, wireType ${wireType}, offset ${offset}`);
+
+        switch (fieldNumber) {
+            case 1: // name
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    vault.name = new TextDecoder().decode(bytes.slice(offset, offset + length));
+                    offset += length;
+                    debugLog(`Found name: ${vault.name}`);
+                }
+                break;
+
+            case 2: // public_key_ecdsa
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    vault.publicKeyEcdsa = new TextDecoder().decode(bytes.slice(offset, offset + length));
+                    offset += length;
+                    debugLog(`Found ECDSA public key: ${vault.publicKeyEcdsa.substring(0, 20)}...`);
+                }
+                break;
+
+            case 3: // public_key_eddsa  
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    vault.publicKeyEddsa = new TextDecoder().decode(bytes.slice(offset, offset + length));
+                    offset += length;
+                    debugLog(`Found EdDSA public key: ${vault.publicKeyEddsa.substring(0, 20)}...`);
+                }
+                break;
+
+            case 4: // signers (repeated string)
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    const signer = new TextDecoder().decode(bytes.slice(offset, offset + length));
+                    vault.signers.push(signer);
+                    offset += length;
+                    debugLog(`Found signer: ${signer}`);
+                }
+                break;
+
+            case 5: // created_at (timestamp) - skip for now
+                offset = skipField(bytes, offset, wireType);
+                break;
+
+            case 6: // hex_chain_code
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    // Skip the chain code for now
+                    offset += length;
+                }
+                break;
+
+            case 7: // key_shares (repeated KeyShare)
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    const keyShareBytes = bytes.slice(offset, offset + length);
+                    const keyShare = parseKeyShare(keyShareBytes);
+                    vault.keyShares.push(keyShare);
+                    offset += length;
+                    debugLog(`Found key share for public key: ${keyShare.publicKey.substring(0, 20)}...`);
+                }
+                break;
+
+            case 8: // local_party_id
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    vault.localPartyId = new TextDecoder().decode(bytes.slice(offset, offset + length));
+                    offset += length;
+                    debugLog(`Found local party ID: ${vault.localPartyId}`);
+                }
+                break;
+
+            case 9: // reshare_prefix
+                if (wireType === 2) {
+                    const [length, lengthOffset] = parseVarint(bytes, offset);
+                    offset = lengthOffset;
+                    vault.resharePrefix = new TextDecoder().decode(bytes.slice(offset, offset + length));
+                    offset += length;
+                    debugLog(`Found reshare prefix: ${vault.resharePrefix}`);
+                }
+                break;
+
+            case 10: // lib_type
+                if (wireType === 0) {
+                    const [value, valueOffset] = parseVarint(bytes, offset);
+                    offset = valueOffset;
+                    vault.libType = value;
+                    debugLog(`Found lib type: ${vault.libType}`);
+                }
+                break;
+
+            default:
+                // Skip unknown field
+                debugLog(`Skipping unknown field ${fieldNumber}`);
+                offset = skipField(bytes, offset, wireType);
+                break;
+        }
+    }
+
+    debugLog(`Parsed vault: ${vault.name}, signers: ${vault.signers.length}, keyShares: ${vault.keyShares.length}, libType: ${vault.libType}`);
+    return vault;
+}
+
+function readVarint(bytes, offset) {
+    let value = 0;
+    let shift = 0;
+    let byte;
+    let bytesRead = 0;
+
+    do {
+        if (offset + bytesRead >= bytes.length) break;
+        byte = bytes[offset + bytesRead];
+        value |= (byte & 0x7F) << shift;
+        shift += 7;
+        bytesRead++;
+    } while ((byte & 0x80) !== 0 && bytesRead < 5);
+
+    return { value, bytesRead };
+}
+
+function getVarintLength(bytes, offset) {
+    let length = 0;
+    let byte;
+
+    do {
+        if (offset + length >= bytes.length) break;
+        byte = bytes[offset + length];
+        length++;
+    } while ((byte & 0x80) !== 0 && length < 5);
+
+    return length;
+}
+
+function findLargeDataChunks(bytes, minSize) {
+    const chunks = [];
+    let currentChunk = [];
+
+    for (let i = 0; i < bytes.length; i++) {
+        // Look for sequences of non-zero bytes that might be keyshare data
+        if (bytes[i] !== 0) {
+            currentChunk.push(bytes[i]);
+        } else {
+            if (currentChunk.length >= minSize) {
+                chunks.push(new Uint8Array(currentChunk));
+            }
+            currentChunk = [];
+        }
+    }
+
+    // Check final chunk
+    if (currentChunk.length >= minSize) {
+        chunks.push(new Uint8Array(currentChunk));
+    }
+
+    return chunks;
+}
+
+function extractField(content, fieldName) {
+    try {
+        // Simple field extraction - look for field patterns
+        const patterns = [
+            new RegExp(`${fieldName}[\\s\\S]{1,10}([A-Za-z0-9+/=]{10,})`, 'i'),
+            new RegExp(`"${fieldName}"\\s*:\\s*"([^"]+)"`, 'i'),
+            new RegExp(`${fieldName}\\x12([\\s\\S]{1,100})`, 'i')
+        ];
+
+        for (const pattern of patterns) {
+            const match = content.match(pattern);
+            if (match && match[1]) {
+                return match[1].trim();
+            }
+        }
+        return null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function processDKLSWithWASM(files, passwords, fileNames) {
+    try {
+        // Check if vs_wasm module is available
+        if (!window.vsWasmModule) {
+            throw new Error("DKLS WASM module not available. Please reload the page.");
+        }
+
+        debugLog("DKLS WASM module available, processing shares...");
+
+        // Parse the vault files to extract DKLS shares
+        const dklsShares = [];
+        const partyIds = [];
+
+        for (let i = 0; i < files.length; i++) {
+            try {
+                debugLog(`Processing file ${i + 1}: ${fileNames[i]}`);
+
+                const vault = parseVaultFromBytes(files[i]);
+
+                const shareData = {
+                    id: `share_${i}`,
+                    partyId: vault.localPartyId,
+                    vault: vault,
+                    keyshareData: vault.keyShares.length > 0 ? vault.keyShares[0].keyshare : null
+                };
+
+                dklsShares.push(shareData);
+                partyIds.push(vault.localPartyId);
+
+                debugLog(`Extracted DKLS share ${i + 1}, data length: ${shareData.keyshareData ? shareData.keyshareData.length : 0}`);
+
+            } catch (parseError) {
+                debugLog(`Error parsing file ${fileNames[i]}: ${parseError.message}`);
+                throw parseError;
+            }
+        }
+
+        if (dklsShares.length === 0) {
+            throw new Error("No valid DKLS shares found in the uploaded files");
+        }
+
+        debugLog(`Found ${dklsShares.length} DKLS shares, attempting key export...`);
+
+        // Display detailed share information
+        let result = `=== DKLS Share Information ===
+
+Found ${dklsShares.length} DKLS shares:
+
+`;
+
+        for (let i = 0; i < dklsShares.length; i++) {
+            const share = dklsShares[i];
+            const vault = share.vault;
+
+            result += `
+Share ${i + 1} (${fileNames[i]}):
+  Party ID: ${share.partyId}
+  Share Data Length: ${share.keyshareData ? share.keyshareData.length : 0} bytes
+  Share Data Preview: ${share.keyshareData ? Array.from(share.keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('') : 'N/A'}...
+`;
+        }
+
+        // Try to use the vs_wasm module for key reconstruction
+        try {
+            // Wait for WASM module to be fully initialized if still loading
+            if (!window.vsWasmModule) {
+                debugLog("WASM module not ready, waiting for initialization...");
+                const vsModule = await initVsWasm;
+                if (!vsModule) {
+                    throw new Error("WASM module failed to initialize");
+                }
+            }
+
+            if (!window.vsWasmModule || !window.vsWasmModule.Keyshare) {
+                throw new Error("WASM module classes not available");
+            }
+
+            const { KeyExportSession, Keyshare } = window.vsWasmModule;
+
+            // Get the first share with keyshare data
+            const validShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
+            if (!validShare) {
+                throw new Error("No valid keyshare data found");
+            }
+
+            debugLog(`Attempting to create Keyshare from ${validShare.keyshareData.length} bytes`);
+
+            // Try different approaches to decode the keyshare data
+            let keyshareBytes = null;
+
+            // Approach 1: Try as hex-encoded string first (most likely based on logs)
+            try {
+                const keyshareStr = new TextDecoder().decode(validShare.keyshareData);
+                debugLog(`Decoded keyshare as string: ${keyshareStr.substring(0, 100)}...`);
+
+                // Check if it's hex-encoded
+                if (/^[0-9a-fA-F\s]+$/.test(keyshareStr.trim())) {
+                    const hexStr = keyshareStr.replace(/\s/g, '').trim();
+                    debugLog(`Detected hex string, length: ${hexStr.length}`);
+
+                    // Convert hex to bytes
+                    const hexBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                    debugLog(`Converted to bytes: ${hexBytes.length} bytes`);
+
+                    // Check if the hex-decoded data is base64
+                    const hexString = new TextDecoder().decode(hexBytes);
+                    debugLog(`Hex-decoded string preview: ${hexString.substring(0, 50)}...`);
+
+                    if (/^[A-Za-z0-9+/]+=*$/.test(hexString.trim())) {
+                        debugLog("Detected base64 inside hex encoding, decoding...");
+                        const base64Bytes = new Uint8Array(atob(hexString.trim()).split('').map(c => c.charCodeAt(0)));
+                        keyshareBytes = base64Bytes;
+                        debugLog(`Final keyshare bytes: ${keyshareBytes.length} bytes`);
+                    } else {
+                        keyshareBytes = hexBytes;
+                        debugLog(`Using hex-decoded bytes directly: ${keyshareBytes.length} bytes`);
+                    }
+
+                    const keyshare = Keyshare.fromBytes(keyshareBytes);
+                    debugLog("Successfully created keyshare from hex/base64 decoded data");
+
+                    // Get public key from keyshare
+                    const publicKeyBytes = keyshare.publicKey();
+                    const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                    result = `=== DKLS Key Information (Decoded) ===
+
+Public Key: ${publicKey}
+
+${result}
+
+Note: Successfully extracted public key from DKLS keyshare data.
+`;
+
+                } else {
+                    throw new Error("Data is not valid hex format");
+                }
+
+            } catch (hexError) {
+                debugLog(`Hex decoding failed: ${hexError.message}`);
+
+                // Approach 2: Try direct binary data (skip protobuf headers)
+                try {
+                    // Look for the actual keyshare data by skipping protobuf field headers
+                    let offset = 0;
+                    const data = validShare.keyshareData;
+
+                    // Skip protobuf headers and find the largest data chunk
+                    while (offset < data.length - 100) {
+                        const fieldHeader = data[offset];
+                        const wireType = fieldHeader & 0x07;
+
+                        if (wireType === 2) { // Length-delimited
+                            offset++;
+                            const lengthResult = readVarint(data, offset);
+                            offset += getVarintLength(data, offset);
+
+                            if (lengthResult.value > 1000 && lengthResult.value < data.length && offset + lengthResult.value <= data.length) {
+                                // This might be the actual keyshare data
+                                keyshareBytes = data.slice(offset, offset + lengthResult.value);
+                                debugLog(`Found potential keyshare at offset ${offset}, length ${lengthResult.value}`);
+                                break;
+                            }
+                            offset += lengthResult.value;
+                        } else {
+                            offset++;
+                        }
+                    }
+
+                    if (keyshareBytes) {
+                        const keyshare = Keyshare.fromBytes(keyshareBytes);
+                        debugLog("Successfully created keyshare from extracted binary data");
+
+                        // Get public key from keyshare
+                        const publicKeyBytes = keyshare.publicKey();
+                        const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+                        result = `=== DKLS Key Information (Binary) ===
+
+Public Key: ${publicKey}
+
+${result}
+
+Note: Successfully extracted public key from DKLS keyshare data.
+`;
+
+                    } else {
+                        throw new Error("Could not find valid keyshare data in protobuf structure");
+                    }
+
+                } catch (binaryError) {
+                    debugLog(`Binary extraction failed: ${binaryError.message}`);
+                    throw new Error(`All keyshare decoding methods failed: ${hexError.message}, ${binaryError.message}`);
+                }
+            }
+
+        } catch (wasmError) {
+            debugLog(`WASM processing error: ${wasmError.message}`);
+
+            result += `
+
+Error: ${wasmError.message}
+
+Note: DKLS key reconstruction failed. The keyshare data format may not be compatible with the current WASM library version.
+
+Debugging Information:
+- Keyshare data length: ${dklsShares[0]?.keyshareData?.length || 'N/A'} bytes
+- Data preview: ${dklsShares[0]?.keyshareData ? Array.from(dklsShares[0].keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ') : 'N/A'}
+`;
+        }
+
+        displayResults(result);
+        debugLog("DKLS processing completed");
+
+    } catch (error) {
+        debugLog(`DKLS processing failed: ${error.message}`);
+        displayResults(`DKLS Error: ${error.message}`);
+    }
+}
+
+function copyToClipboard(text, event) {
+    event.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+        // Get the clicked element directly
+        const btn = event.currentTarget;
+        const originalText = btn.textContent;
+        btn.textContent = '✓';
+        setTimeout(() => {
+            btn.textContent = '📋';
+        }, 100);
+    }).catch(err => {
+        //console.error('Failed to copy:', err);
+    });
+}
