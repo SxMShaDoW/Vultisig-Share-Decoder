@@ -463,11 +463,23 @@ function parseProtobufVault(bytes) {
                         }
                     } else if (fieldData.length > 100) {
                         // Large binary data - likely keyshare
-                        vault.keyshares.push({
-                            publicKey: vault.publicKeyEcdsa,
-                            keyshare: fieldData
-                        });
-                        debugLog(`Found keyshare data: ${fieldData.length} bytes`);
+                        // Check if this is hex-encoded data
+                        const dataStr = new TextDecoder().decode(fieldData);
+                        if (/^[0-9a-fA-F]+$/.test(dataStr.trim()) && dataStr.length > 200) {
+                            // This looks like hex-encoded keyshare data
+                            vault.keyshares.push({
+                                publicKey: vault.publicKeyEcdsa,
+                                keyshare: fieldData  // Keep as bytes, will decode later
+                            });
+                            debugLog(`Found hex-encoded keyshare data: ${fieldData.length} bytes`);
+                        } else {
+                            // Regular binary keyshare data
+                            vault.keyshares.push({
+                                publicKey: vault.publicKeyEcdsa,
+                                keyshare: fieldData
+                            });
+                            debugLog(`Found binary keyshare data: ${fieldData.length} bytes`);
+                        }
                     }
                 } catch (e) {
                     // Not a string, might be binary keyshare data
@@ -658,19 +670,25 @@ Share ${i + 1} (${fileNames[i]}):
             // Convert keyshare data to proper format for vs_wasm
             let keyshareBytes;
             
-            // Check if keyshare data is hex-encoded string
+            // The keyshare data appears to be hex-encoded strings based on the preview
+            // Let's try to decode it properly
             try {
                 const keyshareStr = new TextDecoder().decode(firstShare.keyshareData);
+                debugLog(`Keyshare as string: ${keyshareStr.substring(0, 100)}...`);
+                
+                // Check if it's hex-encoded (which seems to be the case based on preview)
                 if (/^[0-9a-fA-F]+$/.test(keyshareStr.trim())) {
-                    // It's hex-encoded, decode it
+                    // It's hex-encoded, decode it to bytes
                     const hexStr = keyshareStr.trim();
                     keyshareBytes = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                     debugLog(`Decoded hex keyshare to ${keyshareBytes.length} bytes`);
                 } else {
-                    // Try as raw binary data
+                    // Not hex, try as raw binary data
                     keyshareBytes = firstShare.keyshareData;
+                    debugLog(`Using raw keyshare data: ${keyshareBytes.length} bytes`);
                 }
             } catch (e) {
+                debugLog(`Text decoding failed: ${e.message}, using raw data`);
                 // Use raw data if text decoding fails
                 keyshareBytes = firstShare.keyshareData;
             }
@@ -736,12 +754,46 @@ Note: Could not complete full key reconstruction, but extracted public key.
             } catch (altError) {
                 debugLog(`Alternative processing also failed: ${altError}`);
                 
-                result += `
+                // Try one more approach: direct hex decoding
+                try {
+                    debugLog("Trying direct hex decoding approach...");
+                    const firstShare = dklsShares.find(s => s.keyshareData && s.keyshareData.length > 0);
+                    
+                    // Convert to string and try direct hex decode
+                    const keyshareStr = new TextDecoder().decode(firstShare.keyshareData);
+                    const hexDecoded = new Uint8Array(keyshareStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                    
+                    debugLog(`Direct hex decode: ${hexDecoded.length} bytes from ${keyshareStr.length} hex chars`);
+                    
+                    const { Keyshare } = window.vsWasmModule;
+                    const keyshare = Keyshare.fromBytes(hexDecoded);
+                    
+                    // Get public key from keyshare
+                    const publicKeyBytes = keyshare.publicKey();
+                    const publicKey = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                    
+                    debugLog("Direct hex decoding successful!");
+                    
+                    result = `=== DKLS Key Information (Partial) ===
+
+Public Key: ${publicKey}
+
+${result}
+
+Note: Successfully extracted public key using direct hex decoding.
+`;
+                    
+                } catch (hexError) {
+                    debugLog(`Direct hex decoding also failed: ${hexError}`);
+                    
+                    result += `
 
 Error: ${wasmError}
 
-Note: Key reconstruction failed, but share information is displayed above.
+Note: Key reconstruction failed. The keyshare data appears to be in an unsupported format.
+Debug info: First share preview shows hex data: ${Array.from(firstShare.keyshareData.slice(0, 32)).map(b => String.fromCharCode(b)).join('')}
 `;
+                }
             }
         }
         
