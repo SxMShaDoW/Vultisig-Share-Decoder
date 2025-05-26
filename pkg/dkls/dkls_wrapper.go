@@ -10,7 +10,6 @@ import (
     "main/pkg/types"
     "os/exec"
     "encoding/json"
-    "path/filepath"
     "os"
 )
 

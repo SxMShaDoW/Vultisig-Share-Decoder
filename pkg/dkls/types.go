@@ -5,13 +5,6 @@ import (
     "main/pkg/types"
 )
 
-// KeyExportRequest represents a request for DKLS key export
-type KeyExportRequest struct {
-    Shares    []DKLSShareData `json:"shares"`
-    PartyIDs  []string        `json:"party_ids"`
-    Threshold int             `json:"threshold"`
-}
-
 // DKLSShareData represents the internal structure of a DKLS share
 type DKLSShareData struct {
     ID        string `json:"id"`
