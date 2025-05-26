@@ -41,9 +41,35 @@ func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []
 		fmt.Fprintf(outputBuilder, "  Share Data Length: %d bytes\n\n", len(share.ShareData))
 	}
 
-	fmt.Fprintf(outputBuilder, "\nNote: DKLS key reconstruction requires the DKLS WASM library.\n")
-	fmt.Fprintf(outputBuilder, "Currently displaying share information only.\n")
-	fmt.Fprintf(outputBuilder, "To complete DKLS key recovery, integrate the actual DKLS WASM library.\n")
+	// Try to initialize the WASM library for actual key reconstruction
+	fmt.Fprintf(outputBuilder, "\nAttempting DKLS key reconstruction...\n")
+	
+	// Check if we have the WASM library available
+	if err := dklsWrapper.Initialize(); err != nil {
+		fmt.Fprintf(outputBuilder, "\nWASM Library Status: Not available (%v)\n", err)
+		fmt.Fprintf(outputBuilder, "\nTo enable full DKLS key reconstruction:\n")
+		fmt.Fprintf(outputBuilder, "1. Download vs_wasm_bg.wasm from: https://github.com/vultisig/vultisig-windows/blob/main/lib/dkls/vs_wasm_bg.wasm\n")
+		fmt.Fprintf(outputBuilder, "2. Place it in the static/ directory\n")
+		fmt.Fprintf(outputBuilder, "3. Ensure Node.js is installed for WASM execution\n")
+		fmt.Fprintf(outputBuilder, "\nCurrently displaying share information only.\n")
+		return nil
+	}
+
+	// Attempt actual key reconstruction
+	fmt.Fprintf(outputBuilder, "WASM Library Status: Available\n")
+	response, err := dklsWrapper.ExportKey(dklsShares, partyIDs, threshold)
+	if err != nil {
+		fmt.Fprintf(outputBuilder, "Key reconstruction failed: %v\n", err)
+		return nil
+	}
+
+	if response.Success {
+		fmt.Fprintf(outputBuilder, "\n=== DKLS Key Reconstruction Successful! ===\n")
+		fmt.Fprintf(outputBuilder, "Private Key: %x\n", response.PrivateKey)
+		fmt.Fprintf(outputBuilder, "Public Key: %x\n", response.PublicKey)
+	} else {
+		fmt.Fprintf(outputBuilder, "Key reconstruction failed: %s\n", response.Error)
+	}
 
 	return nil
 }
