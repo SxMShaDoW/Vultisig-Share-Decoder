@@ -42,12 +42,13 @@ func DetectSchemeType(content []byte) types.SchemeType {
 	// Try to decode as protobuf Vault
 	vault := &v1.Vault{}
 	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
-		// Check the lib_type field to determine scheme
-		if vault.LibType == 1 { // DKLS lib type
-			log.Printf("Detected DKLS scheme based on lib_type field")
+		// For now, detect DKLS based on other characteristics
+		// Check if it has the reshare_prefix field (DKLS specific)
+		if vault.ResharePrefix != "" {
+			log.Printf("Detected DKLS scheme based on reshare_prefix field")
 			return types.DKLS
 		} else {
-			log.Printf("Detected GG20 scheme based on lib_type field")
+			log.Printf("Detected GG20 scheme (no DKLS indicators)")
 			return types.GG20
 		}
 	}
