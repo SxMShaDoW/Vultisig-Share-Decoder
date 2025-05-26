@@ -26,47 +26,34 @@ func DetectSchemeType(content []byte) types.SchemeType {
 		content = decoded
 	}
 
-	// Try to decode as protobuf (GG20 format)
-	vault := &v1.Vault{}
-	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
-		log.Printf("Detected GG20 scheme based on protobuf structure")
-		return types.GG20
-	}
-
-	// Try to decode as JSON (potential DKLS format)
-	var jsonData map[string]interface{}
-	if err := json.Unmarshal(content, &jsonData); err == nil {
-		// Check for DKLS-specific fields
-		if _, hasDKLSField := jsonData["dkls"]; hasDKLSField {
-			log.Printf("Detected DKLS scheme based on JSON structure")
-			return types.DKLS
-		}
-		if _, hasShareData := jsonData["share_data"]; hasShareData {
-			log.Printf("Detected DKLS scheme based on share_data field")
-			return types.DKLS
-		}
-		if _, hasPartyID := jsonData["party_id"]; hasPartyID {
-			log.Printf("Detected DKLS scheme based on party_id field")
-			return types.DKLS
-		}
-		// Check for typical DKLS share structure
-		if _, hasID := jsonData["id"]; hasID {
-			if _, hasThreshold := jsonData["threshold"]; hasThreshold {
-				log.Printf("Detected DKLS scheme based on share structure")
-				return types.DKLS
-			}
-		}
-	}
-
-	// Check if it's a vault container format
+	// Check if it's a vault container format first
 	var vaultContainer v1.VaultContainer
 	if err := proto.Unmarshal(content, &vaultContainer); err == nil {
-		log.Printf("Detected GG20 scheme based on vault container structure")
-		return types.GG20
+		log.Printf("Found VaultContainer, checking inner vault")
+		// Decode the inner vault to check lib_type
+		vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
+		if err != nil {
+			log.Printf("Failed to decode inner vault from container")
+			return types.GG20
+		}
+		content = vaultData
+	}
+
+	// Try to decode as protobuf Vault
+	vault := &v1.Vault{}
+	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
+		// Check the lib_type field to determine scheme
+		if vault.LibType == 1 { // DKLS lib type
+			log.Printf("Detected DKLS scheme based on lib_type field")
+			return types.DKLS
+		} else {
+			log.Printf("Detected GG20 scheme based on lib_type field")
+			return types.GG20
+		}
 	}
 
 	// Default to GG20 for backward compatibility
-	log.Printf("Defaulting to GG20 scheme (no clear DKLS indicators found)")
+	log.Printf("Defaulting to GG20 scheme (failed to parse as protobuf)")
 	return types.GG20
 }
 
@@ -74,29 +61,38 @@ func DetectSchemeType(content []byte) types.SchemeType {
 func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder, threshold int) error {
 	log.Printf("Processing %d DKLS files with threshold %d", len(fileInfos), threshold)
 
-	dklsWrapper := dkls.NewDKLSWrapper()
-	if err := dklsWrapper.Initialize(); err != nil {
-		return fmt.Errorf("failed to initialize DKLS wrapper: %w", err)
-	}
-
 	var dklsShares []dkls.DKLSShareData
 	var partyIDs []string
 
 	for i, fileInfo := range fileInfos {
 		log.Printf("Processing DKLS file %d: %s", i, fileInfo.Name)
 
-		// Try to parse as DKLS share
-		var shareData dkls.DKLSShareData
-		if err := json.Unmarshal(fileInfo.Content, &shareData); err != nil {
-			return fmt.Errorf("failed to parse DKLS share from file %s: %w", fileInfo.Name, err)
+		// Parse the vault from the file content
+		vault, err := ParseDKLSVault(fileInfo.Content)
+		if err != nil {
+			return fmt.Errorf("failed to parse DKLS vault from file %s: %w", fileInfo.Name, err)
+		}
+
+		// Extract DKLS share data from vault
+		shareData := dkls.DKLSShareData{
+			ID:      vault.LocalPartyId,
+			PartyID: vault.LocalPartyId,
+		}
+
+		// Get keyshare data - for DKLS, we need the raw keyshare content
+		if len(vault.KeyShares) > 0 {
+			shareData.ShareData = []byte(vault.KeyShares[0].Keyshare)
 		}
 
 		dklsShares = append(dklsShares, shareData)
 		partyIDs = append(partyIDs, shareData.PartyID)
 
 		fmt.Fprintf(outputBuilder, "DKLS Share %d (%s):\n", i+1, fileInfo.Name)
+		fmt.Fprintf(outputBuilder, "  Vault Name: %s\n", vault.Name)
 		fmt.Fprintf(outputBuilder, "  Party ID: %s\n", shareData.PartyID)
 		fmt.Fprintf(outputBuilder, "  Share ID: %s\n", shareData.ID)
+		fmt.Fprintf(outputBuilder, "  ECDSA Public Key: %s\n", vault.PublicKeyEcdsa)
+		fmt.Fprintf(outputBuilder, "  EdDSA Public Key: %s\n", vault.PublicKeyEddsa)
 		fmt.Fprintf(outputBuilder, "  Share Data Length: %d bytes\n\n", len(shareData.ShareData))
 	}
 
@@ -106,6 +102,33 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 
 	// Process the DKLS shares
 	return keyprocessing.ProcessDKLSKeys(threshold, dklsShares, partyIDs, outputBuilder)
+}
+
+// ParseDKLSVault parses a DKLS vault from content
+func ParseDKLSVault(content []byte) (*v1.Vault, error) {
+	// Try to decode as base64 first
+	if decoded, err := base64.StdEncoding.DecodeString(string(content)); err == nil {
+		content = decoded
+	}
+
+	// Check if it's a vault container
+	var vaultContainer v1.VaultContainer
+	if err := proto.Unmarshal(content, &vaultContainer); err == nil {
+		// Decode the inner vault
+		vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode inner vault from container: %w", err)
+		}
+		content = vaultData
+	}
+
+	// Parse as vault
+	vault := &v1.Vault{}
+	if err := proto.Unmarshal(content, vault); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
+	}
+
+	return vault, nil
 }
 
 func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
