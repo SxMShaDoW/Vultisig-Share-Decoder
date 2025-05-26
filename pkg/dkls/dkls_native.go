@@ -1,4 +1,3 @@
-
 package dkls
 
 import (
@@ -49,7 +48,7 @@ func (p *NativeDKLSProcessor) ReconstructPrivateKey(shares []DKLSShareData, thre
 	// Take the first share for demonstration
 	// In a real implementation, you would combine all shares according to DKLS protocol
 	primaryShare := shares[0]
-	
+
 	// Extract private key from the share data
 	// This is a simplified approach - real DKLS would require proper threshold cryptography
 	privateKey, publicKey, err := p.extractKeysFromShare(primaryShare.ShareData)
@@ -95,7 +94,7 @@ func (p *NativeDKLSProcessor) extractKeysFromShare(shareData []byte) (string, st
 
 	// For DKLS shares, we need to extract the actual key material
 	// This is a simplified extraction - real DKLS would parse the binary format properly
-	
+
 	// Try to find key material in the share data
 	// DKLS shares typically contain the private key material in a specific format
 	privateKeyBytes := p.extractPrivateKeyFromDKLS(rawData)
@@ -115,7 +114,7 @@ func (p *NativeDKLSProcessor) extractKeysFromShare(shareData []byte) (string, st
 func (p *NativeDKLSProcessor) extractPrivateKeyFromDKLS(data []byte) []byte {
 	// This is a simplified parser for DKLS format
 	// In reality, you would need to parse the actual DKLS binary format
-	
+
 	if len(data) < 32 {
 		return nil
 	}
@@ -172,7 +171,7 @@ func (p *NativeDKLSProcessor) derivePublicKey(privateKey []byte) []byte {
 			privateKey = padded
 		}
 	}
-	
+
 	// Use proper secp256k1 key derivation
 	_, pubKey := btcec.PrivKeyFromBytes(privateKey)
 	return pubKey.SerializeCompressed()
@@ -237,7 +236,7 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 
 	// Create secp256k1 private key
 	privateKey, publicKey := btcec.PrivKeyFromBytes(privateKeyBytes)
-	
+
 	fmt.Fprintf(outputBuilder, "\n=== Cryptocurrency Addresses ===\n")
 	fmt.Fprintf(outputBuilder, "Root private key: %s\n", hex.EncodeToString(privateKey.Serialize()))
 	fmt.Fprintf(outputBuilder, "Root public key: %s\n\n", hex.EncodeToString(publicKey.SerializeCompressed()))
@@ -249,7 +248,7 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 
 	// Generate Bitcoin addresses
 	net := &chaincfg.MainNetParams
-	
+
 	// Create WIF for Bitcoin
 	wif, err := btcutil.NewWIF(privateKey, net, true)
 	if err == nil {
@@ -265,9 +264,9 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 	// Generate derived addresses for various cryptocurrencies
 	// Create a dummy chaincode for HD derivation (in real DKLS, this would come from the vault)
 	chaincode := sha256.Sum256([]byte("dkls-chaincode"))
-	
+
 	extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincode[:], []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
-	
+
 	// Define supported coins with their derivation paths
 	supportedCoins := []struct {
 		name       string
@@ -314,7 +313,7 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 	fmt.Fprintf(outputBuilder, "\n=== Derived Cryptocurrency Keys ===\n")
 	for _, coin := range supportedCoins {
 		fmt.Fprintf(outputBuilder, "\n--- %s ---\n", coin.name)
-		
+
 		derivedKey, err := keyhandlers.GetDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
 		if err != nil {
 			fmt.Fprintf(outputBuilder, "Error deriving %s key: %v\n", coin.name, err)
@@ -327,4 +326,58 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 	}
 
 	return nil
+}
+
+// analyzeKeyshareStructure analyzes the structure of DKLS keyshare data
+func (p *NativeDKLSProcessor) analyzeKeyshareStructure(data []byte) {
+	log.Printf("=== DKLS Keyshare Structure Analysis ===")
+	log.Printf("Total length: %d bytes", len(data))
+
+	// Check if it's base64 encoded
+	if len(data) > 0 && ((data[0] >= 'A' && data[0] <= 'Z') || 
+		(data[0] >= 'a' && data[0] <= 'z') || 
+		(data[0] >= '0' && data[0] <= '9') || 
+		data[0] == '+' || data[0] == '/') {
+
+		if decoded, err := hex.DecodeString(string(data)); err == nil {
+			log.Printf("Appears to be hex-encoded, decoded length: %d", len(decoded))
+			data = decoded
+		}
+	}
+
+	// Look for patterns that might indicate key material
+	log.Printf("Looking for 32-byte sequences (potential private keys)...")
+	for i := 0; i <= len(data)-32; i += 4 {
+		segment := data[i : i+32]
+		if p.couldBePrivateKey(segment) {
+			log.Printf("Potential private key at offset %d: %x", i, segment)
+		}
+	}
+
+	// Check for common DKLS markers or patterns
+	log.Printf("First 128 bytes (hex): %x", data[:min(len(data), 128)])
+}
+
+// couldBePrivateKey performs basic checks to see if bytes could be a private key
+func (p *NativeDKLSProcessor) couldBePrivateKey(data []byte) bool {
+	if len(data) != 32 {
+		return false
+	}
+
+	// Check entropy - not all zeros, not all same value
+	firstByte := data[0]
+	allSame := true
+	nonZeroCount := 0
+
+	for _, b := range data {
+		if b != firstByte {
+			allSame = false
+		}
+		if b != 0 {
+			nonZeroCount++
+		}
+	}
+
+	// Good entropy indicators: not all same, has non-zero bytes, not too repetitive
+	return !allSame && nonZeroCount > 16 && nonZeroCount < 30
 }
