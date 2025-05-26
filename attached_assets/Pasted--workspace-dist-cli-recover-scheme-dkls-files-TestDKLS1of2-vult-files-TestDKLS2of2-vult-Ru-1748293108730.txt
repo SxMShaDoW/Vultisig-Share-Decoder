@@ -1,0 +1,164 @@
+~/workspace$ ./dist/cli recover --scheme dkls --files TestDKLS1of2.vult --files TestDKLS2of2.vult
+Running in command-line mode
+Processing 2 files: [TestDKLS1of2.vult TestDKLS2of2.vult]
+Read file TestDKLS1of2.vult, content length: 157476 bytes
+Read file TestDKLS2of2.vult, content length: 157496 bytes
+Using DKLS scheme
+2025/05/26 20:57:09 ProcessDKLSFiles: Processing 2 DKLS files with threshold 2
+2025/05/26 20:57:09 Processing DKLS file 0: TestDKLS1of2.vult
+2025/05/26 20:57:09 ParseDKLSVault: Starting parse for 157476 bytes
+2025/05/26 20:57:09 ParseDKLSVault: Successfully decoded base64, new length: 118106
+2025/05/26 20:57:09 ParseDKLSVault: Found VaultContainer
+2025/05/26 20:57:09 ParseDKLSVault: Decoded inner vault, length: 88575
+2025/05/26 20:57:09 ParseDKLSVault: Successfully parsed vault 'Test Fast Vault DKLS' with 2 keyshares
+2025/05/26 20:57:09 Vault: Name='Test Fast Vault DKLS', LocalPartyId='Server-06287', ResharePrefix=''
+2025/05/26 20:57:09 Vault has 2 keyshares
+2025/05/26 20:57:09 PublicKeyEcdsa: 0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b
+2025/05/26 20:57:09 PublicKeyEddsa: 20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9
+2025/05/26 20:57:09 DKLS keyshare data length: 87960 bytes
+2025/05/26 20:57:09 Keyshare preview: AAAAAQAAAAACAgD0tcMxzk20+PnjVvqHUAC0gbh/Zfzm/Z2OCcUVv199yeL4xIJtbSNAfP9FSYuUD1J1bDBW+hvLoMt/a6/CR46s
+2025/05/26 20:57:09 Keyshare 0: PublicKey=0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b, Length=87960 bytes
+2025/05/26 20:57:09 Keyshare 1: PublicKey=20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9, Length=176 bytes
+2025/05/26 20:57:09 Processing DKLS file 1: TestDKLS2of2.vult
+2025/05/26 20:57:09 ParseDKLSVault: Starting parse for 157496 bytes
+2025/05/26 20:57:09 ParseDKLSVault: Successfully decoded base64, new length: 118122
+2025/05/26 20:57:09 ParseDKLSVault: Found VaultContainer
+2025/05/26 20:57:09 ParseDKLSVault: Decoded inner vault, length: 88586
+2025/05/26 20:57:09 ParseDKLSVault: Successfully parsed vault 'Test Fast Vault DKLS' with 2 keyshares
+2025/05/26 20:57:09 Vault: Name='Test Fast Vault DKLS', LocalPartyId='Dorian’s Mac mini-ABC', ResharePrefix=''
+2025/05/26 20:57:09 Vault has 2 keyshares
+2025/05/26 20:57:09 PublicKeyEcdsa: 0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b
+2025/05/26 20:57:09 PublicKeyEddsa: 20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9
+2025/05/26 20:57:09 DKLS keyshare data length: 87960 bytes
+2025/05/26 20:57:09 Keyshare preview: AAAAAQAAAAACAgH0tcMxzk20+PnjVvqHUAC0gbh/Zfzm/Z2OCcUVv199yeL4xIJtbSNAfP9FSYuUD1J1bDBW+hvLoMt/a6/CR46s
+2025/05/26 20:57:09 Keyshare 0: PublicKey=0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b, Length=87960 bytes
+2025/05/26 20:57:09 Keyshare 1: PublicKey=20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9, Length=176 bytes
+2025/05/26 20:57:09 Processing DKLS keys with threshold: 2, number of shares: 2
+2025/05/26 20:57:09 DKLS wrapper initialized with WASM library
+2025/05/26 20:57:09 Attempting native DKLS reconstruction with 2 shares
+2025/05/26 20:57:09 Extracting secret share from 87960 bytes of DKLS data for share index 1
+2025/05/26 20:57:09 Working with 87960 bytes of processed keyshare data
+2025/05/26 20:57:09 First 64 bytes: 4141414141514141414141434167443074634d787a6b32302b506e6a56767148554143306762682f5a667a6d2f5a324f436355567631393979654c3478494a74
+2025/05/26 20:57:09 Better candidate found at offset 0 with score 75: 4141414141514141
+2025/05/26 20:57:09 Better candidate found at offset 4 with score 85: 4151414141414143
+2025/05/26 20:57:10 Using best candidate private key: 4151414141414143
+2025/05/26 20:57:10 Extracted secret share 1: x=1, y=4151414141414143
+2025/05/26 20:57:10 Extracting secret share from 87960 bytes of DKLS data for share index 2
+2025/05/26 20:57:10 Working with 87960 bytes of processed keyshare data
+2025/05/26 20:57:10 First 64 bytes: 4141414141514141414141434167483074634d787a6b32302b506e6a56767148554143306762682f5a667a6d2f5a324f436355567631393979654c3478494a74
+2025/05/26 20:57:10 Better candidate found at offset 0 with score 75: 4141414141514141
+2025/05/26 20:57:10 Better candidate found at offset 4 with score 85: 4151414141414143
+2025/05/26 20:57:11 Using best candidate private key: 4151414141414143
+2025/05/26 20:57:11 Extracted secret share 2: x=2, y=4151414141414143
+2025/05/26 20:57:11 Reconstructing secret from 2 shares
+2025/05/26 20:57:11 Using shares in sorted order:
+2025/05/26 20:57:11   Share 0: x=1, y=4151414141414143
+2025/05/26 20:57:11   Share 1: x=2, y=4151414141414143
+2025/05/26 20:57:11 Reconstructed valid private key: 0847ae86e98b1d9f
+=== DKLS Key Recovery ===
+Processing 2 DKLS files with threshold 2
+
+DKLS Share 1 (TestDKLS1of2.vult):
+  Vault Name: Test Fast Vault DKLS
+  Party ID: Server-06287
+  Share ID: Server-06287
+  ECDSA Public Key: 0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b
+  EdDSA Public Key: 20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9
+  Share Data Length: 87960 bytes
+
+DKLS Share 2 (TestDKLS2of2.vult):
+  Vault Name: Test Fast Vault DKLS
+  Party ID: Dorian’s Mac mini-ABC
+  Share ID: Dorian’s Mac mini-ABC
+  ECDSA Public Key: 0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b
+  EdDSA Public Key: 20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9
+  Share Data Length: 87960 bytes
+
+=== DKLS Key Reconstruction ===
+Using 2 out of 2 shares for reconstruction
+
+DKLS Shares Information:
+DKLS Share 1:
+  Party ID: Server-06287
+  Share ID: Server-06287
+  Share Data Length: 87960 bytes
+  Share Data Preview: 4141414141514141414141434167443074634d787a6b32302b506e6a56767148...
+
+DKLS Share 2:
+  Party ID: Dorian’s Mac mini-ABC
+  Share ID: Dorian’s Mac mini-ABC
+  Share Data Length: 87960 bytes
+  Share Data Preview: 4141414141514141414141434167483074634d787a6b32302b506e6a56767148...
+
+Attempting native Go DKLS key reconstruction...
+
+=== Native Go DKLS Key Reconstruction ===
+Using native Go implementation (no WASM/Node.js required)
+Processing 2 shares with threshold 2
+
+✅ DKLS Key Reconstruction Successful!
+
+Private Key (hex): 0847ae86e98b1d9f7ffff7cb18d0f7f336bd0ec43532271fac0f1b9857adafd9
+Public Key (hex): 02eba407d3e365fd9b9e04cc8da98779bd5ed3ba1f16fa85f8a40c798eda1ac9ff
+Key Type: ECDSA
+
+
+=== Cryptocurrency Addresses ===
+Root private key: 0847ae86e98b1d9f7ffff7cb18d0f7f336bd0ec43532271fac0f1b9857adafd9
+Root public key: 02eba407d3e365fd9b9e04cc8da98779bd5ed3ba1f16fa85f8a40c798eda1ac9ff
+
+Ethereum Address: 0xfbC25d278B1E4a3DbAcb06A52B2DBc439C94Fd55
+Bitcoin WIF: KwVoi5npeS7Y5BEWAnfRCZv3RGCvdTE6CvVvYfQms6mRths9Wbf1
+Bitcoin Address (P2WPKH): bc1qeaufvgwlkcnmhy27sxnhc694d7vmndpfdr6k6q
+
+=== Derived Cryptocurrency Keys ===
+
+--- Bitcoin ---
+
+non-hardened extended private key for bitcoin:xprvA2n5MuYrawHKYbzXMvjCGMd2TdwdP4f4L7e9S4PuMVTV3F5gGPQCUWZkdnF5Jrg7LLYHC4TUJpdudV3yNmPb6pFomQBWZteFE3BiAgXicK7
+
+hex encoded non-hardened public key for bitcoin:0273a6a918fdda6472e035a4dfe3a185b4c11b5c3a025d34d66ecf0e97ed420880
+
+address:bc1quy86n0sf9fwzve4vdtfg2hl6y599f2c60gsjxk
+
+WIF private key for bitcoin: p2wpkh:L4yBUs9DH7kEmpG9Jsbi2NL1e3GuuSLoZ7KY78nbBnhn9MHhHm96
+
+--- Ethereum ---
+
+hex encoded non-hardened public key for ethereum:023461a34ae732fd224cc6dbef8a38a26bb319bd8b995633c98f76ad715d2af685
+
+hex encoded private key for ethereum:2d283f19ead4bf4362f7d3e8697af1524f28cf8990266f371a3ad007b01ecfea
+
+ethereum address:0x48941B36F627bEAA629d403679eb157De1dd69e4
+
+--- Dogecoin ---
+
+non-hardened extended private key for dogecoin:xprvA3kGVVqbYR4y2Hh4zTamC6H8SD3XHRSH3s1HB5xn2qmrzHXKc1y1B2nccQx6hD5Lf2tnjVdfxLfrCcmUHWCE4kEYF8jAWZAVXm3R98YWi8W
+
+hex encoded non-hardened public key for dogecoin:02ed289828452818504df0078790e3409be3b7052a5b9548114e75f6a19da45502
+
+address:DC6jLxspWixfSSvf9MpAticuoSRDZ1rHip
+
+WIF private key for dogecoin: QQX74NvMZckagFAJchmTEEj9TQD2WCrwDkhtkDsPhbr21kVZ3knS
+
+--- Litecoin ---
+
+non-hardened extended private key for litcoin:xprvA2csKmvhbeuwNGreVcgVWrMbyTHWBqxQDXLaaQCbcibuvy1F3LKhmZ5SFSFHTKttVStkEoK4DchZF9gEBBMifk6LLdf5Esy4Can3vxPa5ZR
+hex encoded non-hardened public key for litecoin:02fd7e34d8d86c03614342a6d73aa58fd4a4fc95bec515d76555320327aa4d9f2d
+
+address:ltc1qn5qykef43d8hxzvw34u5g588aqxs9takupwxwp
+
+WIF private key for litecoin: TARKEBybQ9Uym7Em4FV8Nda3pze8yrKWHguReTch5K2gD5bjeeR5
+
+--- THORChain ---
+
+non-hardened extended private key for THORChain:xprvA3cGyVkFyAeGYwLzXrLimGc15yWmSaYKyehNpp3EEqJUVDmWh5ZiwAtz96LBTcBv73vZAECUFq2XmMXNKVkZVARy75GFFa8hY4P87Sk3L3K
+
+hex encoded non-hardened private key for THORChain:661904ea7aa00e563b7c5a93f7aa243bded30e48641d4de948cf34ef4c728fe0
+
+hex encoded non-hardened public key for THORChain:0360f83e721c1ee358483af26562db0f486805ae0966b2234fd4bcfd54a5970c96
+
+address:thor1fvlsj0j2yzf6ze2vdmy9kxhgg379zr2ycdw65k
+
+Note: This is a simplified DKLS reconstruction for demonstration.
+For production use, implement the full DKLS threshold cryptography protocol.
