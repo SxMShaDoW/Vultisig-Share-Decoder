@@ -100,6 +100,8 @@ func RecoverAction(cCtx *cli.Context) error {
 	passwords := make([]string, len(files))
 	source := types.CommandLine
 
+	fmt.Printf("Processing %d files: %v\n", len(files), files)
+
 	// Convert files to FileInfo format for scheme detection
 	var fileInfos []types.FileInfo
 	for _, f := range files {
@@ -107,6 +109,7 @@ func RecoverAction(cCtx *cli.Context) error {
 		if err != nil {
 			return fmt.Errorf("error reading file %s: %w", f, err)
 		}
+		fmt.Printf("Read file %s, content length: %d bytes\n", f, len(content))
 		fileInfos = append(fileInfos, types.FileInfo{
 			Name:    f,
 			Content: content,
@@ -116,7 +119,7 @@ func RecoverAction(cCtx *cli.Context) error {
 	// Use shared processing function which handles scheme detection
 	output, err := shared.ProcessFileContent(fileInfos, passwords, source)
 	if err != nil {
-		return err
+		return fmt.Errorf("error in ProcessFileContent: %w", err)
 	}
 
 	// If running in CLI mode, print to console

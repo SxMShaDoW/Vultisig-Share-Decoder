@@ -60,7 +60,7 @@ func DetectSchemeType(content []byte) types.SchemeType {
 
 // ProcessDKLSFiles processes DKLS format files
 func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder, threshold int) error {
-	log.Printf("Processing %d DKLS files with threshold %d", len(fileInfos), threshold)
+	log.Printf("ProcessDKLSFiles: Processing %d DKLS files with threshold %d", len(fileInfos), threshold)
 
 	var dklsShares []dkls.DKLSShareData
 	var partyIDs []string
@@ -69,13 +69,13 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 		log.Printf("Processing DKLS file %d: %s", i, fileInfo.Name)
 
 		// Parse the vault from the file content
-		vault, err := ParseDKLSVault(fileInfo.Content)
+		vault, shareData, err := ParseDKLSVault(fileInfo.Content)
 		if err != nil {
 			return fmt.Errorf("failed to parse DKLS vault from file %s: %w", fileInfo.Name, err)
 		}
 
 		// Extract DKLS share data from vault
-		shareData := dkls.DKLSShareData{
+		shareData = dkls.DKLSShareData{
 			ID:      vault.LocalPartyId,
 			PartyID: vault.LocalPartyId,
 		}
@@ -110,30 +110,37 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 }
 
 // ParseDKLSVault parses a DKLS vault from content
-func ParseDKLSVault(content []byte) (*v1.Vault, error) {
+func ParseDKLSVault(content []byte) (*v1.Vault, dkls.DKLSShareData, error) {
+	log.Printf("ParseDKLSVault: Starting parse for %d bytes", len(content))
+
 	// Try to decode as base64 first
 	if decoded, err := base64.StdEncoding.DecodeString(string(content)); err == nil {
+		log.Printf("ParseDKLSVault: Successfully decoded base64, new length: %d", len(decoded))
 		content = decoded
 	}
 
-	// Check if it's a vault container
+	// Check if it's a vault container format first
 	var vaultContainer v1.VaultContainer
 	if err := proto.Unmarshal(content, &vaultContainer); err == nil {
+		log.Printf("ParseDKLSVault: Found VaultContainer")
 		// Decode the inner vault
 		vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode inner vault from container: %w", err)
+			return nil, dkls.DKLSShareData{}, fmt.Errorf("failed to decode inner vault: %w", err)
 		}
+		log.Printf("ParseDKLSVault: Decoded inner vault, length: %d", len(vaultData))
 		content = vaultData
 	}
 
 	// Parse as vault
 	vault := &v1.Vault{}
 	if err := proto.Unmarshal(content, vault); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
+		return nil, dkls.DKLSShareData{}, fmt.Errorf("failed to unmarshal vault: %w", err)
 	}
 
-	return vault, nil
+	log.Printf("ParseDKLSVault: Successfully parsed vault '%s' with %d keyshares", vault.Name, len(vault.KeyShares))
+
+	return vault, dkls.DKLSShareData{}, nil
 }
 
 func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
