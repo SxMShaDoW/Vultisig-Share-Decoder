@@ -1,0 +1,35 @@
+2025-05-26T21:51:10.180Z: vs_wasm_bg.wasm fetched successfully, size: 782703 bytes
+2025-05-26T21:51:10.599Z: vs_wasm_bg.wasm loaded, size: 782703 bytes
+2025-05-26T21:51:10.600Z: vs_wasm module loaded, initializing...
+2025-05-26T21:51:10.608Z: vs_wasm initialized successfully
+2025-05-26T21:51:15.312Z: Main WASM initialized successfully
+2025-05-26T21:51:15.312Z: Main WASM module initialized successfully
+2025-05-26T21:51:15.312Z: vs_wasm module initialized successfully
+2025-05-26T21:51:15.312Z: Application initialization complete
+2025-05-26T21:51:15.312Z: UI initialized and ready
+2025-05-26T21:51:21.053Z: Added new file input group 2
+2025-05-26T21:51:23.463Z: Selected scheme: dkls
+2025-05-26T21:51:23.463Z: Processing with DKLS scheme using WASM library...
+2025-05-26T21:51:23.463Z: DKLS WASM module available, processing shares...
+2025-05-26T21:51:23.463Z: Processing file 1: Test Fast Vault DKLS-8d9b-share1of2-nopass.vult
+2025-05-26T21:51:23.463Z: Parsing vault from 157476 bytes
+2025-05-26T21:51:23.468Z: Decoded base64 content, new length: 118106
+2025-05-26T21:51:23.469Z: Found binary keyshare data: 118100 bytes
+2025-05-26T21:51:23.469Z: Extracted DKLS share 1, data length: 118100
+2025-05-26T21:51:23.469Z: Processing file 2: Test Fast Vault DKLS-8d9b-share2of2.vult
+2025-05-26T21:51:23.469Z: Parsing vault from 157496 bytes
+2025-05-26T21:51:23.473Z: Decoded base64 content, new length: 118122
+2025-05-26T21:51:23.474Z: Found binary keyshare data: 118116 bytes
+2025-05-26T21:51:23.474Z: Extracted DKLS share 2, data length: 118116
+2025-05-26T21:51:23.474Z: Found 2 DKLS shares, attempting key export...
+2025-05-26T21:51:23.474Z: Attempting to create Keyshare from 118100 bytes
+2025-05-26T21:51:23.474Z: Keyshare as string: ChRUZXN0IEZhc3QgVmF1bHQgREtMUxJCMDMzM2UzZDRkZjljYzA3MWJlMjRmZDZjOTk1NDIxMDM2MDc0YTFhODhlNWQzZTBiYzIx...
+2025-05-26T21:51:23.474Z: Using raw keyshare data: 118100 bytes
+2025-05-26T21:51:23.475Z: WASM processing error: Keyshare decode error
+2025-05-26T21:51:23.475Z: Trying alternative keyshare processing...
+2025-05-26T21:51:23.477Z: Alternative processing also failed: Keyshare decode error
+2025-05-26T21:51:23.477Z: Trying direct hex decoding approach...
+2025-05-26T21:51:23.482Z: Direct hex decode: 59050 bytes from 118100 hex chars
+2025-05-26T21:51:23.482Z: Direct hex decoding also failed: Keyshare decode error
+2025-05-26T21:51:23.482Z: DKLS processing failed: firstShare is not defined
+2025-05-26T21:51:23.482Z: Error in results: DKLS Error: firstShare is not defined
