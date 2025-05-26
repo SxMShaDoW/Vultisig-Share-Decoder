@@ -10,7 +10,7 @@ GOPATH = "$REPL_HOME/gopath"
 
 [nix]
 channel = "stable-24_05"
-packages = ["hexdump"]
+packages = ["hexdump", "file"]
 
 [gitHubImport]
 requiredFiles = [".replit"]
