@@ -26,12 +26,16 @@ const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.imp
 // Initialize vs_wasm_bg.wasm (additional WASM module)
 const initVsWasm = (async () => {
     try {
+        debugLog("Starting vs_wasm module import...");
+        
         // Import the vs_wasm module
         const vsWasmModule = await import('./vs_wasm.js');
+        debugLog("vs_wasm module imported successfully");
         
-        // Initialize the WASM module
+        // Initialize the WASM module with proper path
+        debugLog("Initializing WASM binary...");
         await vsWasmModule.default('./vs_wasm_bg.wasm');
-        debugLog("vs_wasm initialized successfully");
+        debugLog("vs_wasm WASM binary initialized successfully");
         
         // Set up the module classes
         window.vsWasmModule = {
@@ -39,9 +43,11 @@ const initVsWasm = (async () => {
             KeyExportSession: vsWasmModule.KeyExportSession
         };
         
+        debugLog("vs_wasm classes configured successfully");
         return window.vsWasmModule;
     } catch (error) {
         debugLog(`vs_wasm initialization failed: ${error.message}`);
+        debugLog(`Error stack: ${error.stack}`);
         debugLog("Note: vs_wasm is optional for DKLS processing");
         return null;
     }
@@ -581,7 +587,7 @@ function extractField(content, fieldName) {
 async function processDKLSWithWASM(files, passwords, fileNames) {
     try {
         // Check if vs_wasm module is available
-        if (!window.vsWasmModule || !window.vsWasmInstance) {
+        if (!window.vsWasmModule) {
             throw new Error("DKLS WASM module not available. Please reload the page.");
         }
 
@@ -642,6 +648,15 @@ Share ${i + 1} (${fileNames[i]}):
 
         // Try to use the vs_wasm module for key reconstruction
         try {
+            // Wait for WASM module to be fully initialized if still loading
+            if (!window.vsWasmModule) {
+                debugLog("WASM module not ready, waiting for initialization...");
+                const vsModule = await initVsWasm;
+                if (!vsModule) {
+                    throw new Error("WASM module failed to initialize");
+                }
+            }
+            
             if (!window.vsWasmModule || !window.vsWasmModule.Keyshare) {
                 throw new Error("WASM module classes not available");
             }
