@@ -90,6 +90,8 @@ func (p *NativeDKLSProcessor) extractKeysFromShare(shareData []byte) (string, st
 	}
 
 	log.Printf("Processing raw share data of length: %d bytes", len(rawData))
+	log.Printf("First 64 bytes of share data: %x", rawData[:min(len(rawData), 64)])
+	log.Printf("Share data as string preview: %s", string(shareData[:min(len(shareData), 100)]))
 
 	// For DKLS shares, we need to extract the actual key material
 	// This is a simplified extraction - real DKLS would parse the binary format properly
