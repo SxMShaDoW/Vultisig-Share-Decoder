@@ -32,6 +32,7 @@ func startServer() {
     handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if strings.HasSuffix(r.URL.Path, ".wasm") {
             w.Header().Set("Content-Type", "application/wasm")
+            log.Printf("Serving WASM file: %s", r.URL.Path)
         }
         fs.ServeHTTP(w, r)
     })
