@@ -125,6 +125,75 @@ window.toggleSection = toggleSection;
 window.checkBalance = checkBalance;
 window.copyToClipboard = copyToClipboard;
 
+// Helper function to parse vault from .vult file
+function parseVaultFromBytes(fileData) {
+    // First, check if it's base64 encoded
+    let vaultData = fileData;
+    
+    // Try to decode as base64 first (common for .vult files)
+    try {
+        const base64String = new TextDecoder().decode(fileData);
+        const decoded = Uint8Array.from(atob(base64String), c => c.charCodeAt(0));
+        if (decoded.length > 100) { // Reasonable size check
+            vaultData = decoded;
+            debugLog("Successfully decoded base64 vault data");
+        }
+    } catch (e) {
+        debugLog("Not base64 encoded, using raw data");
+    }
+    
+    // Simple protobuf-like parsing to extract keyshare data
+    // Look for the keyshare field in the vault structure
+    let offset = 0;
+    let keyshareData = null;
+    
+    while (offset < vaultData.length - 10) {
+        // Look for length-delimited fields (wire type 2)
+        const fieldHeader = vaultData[offset];
+        const wireType = fieldHeader & 0x07;
+        
+        if (wireType === 2) { // Length-delimited field
+            offset++;
+            
+            // Read varint length
+            let length = 0;
+            let shift = 0;
+            let lengthBytes = 0;
+            
+            while (offset < vaultData.length && lengthBytes < 5) {
+                const byte = vaultData[offset++];
+                lengthBytes++;
+                length |= (byte & 0x7F) << shift;
+                if ((byte & 0x80) === 0) break;
+                shift += 7;
+            }
+            
+            // If this looks like keyshare data (reasonable size and starts with expected patterns)
+            if (length > 1000 && length < vaultData.length && offset + length <= vaultData.length) {
+                const potentialKeyshare = vaultData.slice(offset, offset + length);
+                
+                // Check if this could be keyshare data
+                // DKLS keyshares often start with certain patterns or have specific structures
+                if (potentialKeyshare.length > 1000) {
+                    keyshareData = potentialKeyshare;
+                    debugLog(`Found potential keyshare data at offset ${offset - lengthBytes - 1}, length: ${length}`);
+                    break;
+                }
+            }
+            
+            offset += length;
+        } else {
+            offset++;
+        }
+    }
+    
+    if (!keyshareData) {
+        throw new Error("Could not find keyshare data in vault file");
+    }
+    
+    return keyshareData;
+}
+
 async function processDKLSWithWASM(files, passwords, fileNames) {
     if (!window.vsWasmModule) {
         throw new Error("DKLS WASM module not available. Please reload the page.");
@@ -153,9 +222,14 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
             debugLog(`First 32 bytes: ${Array.from(files[i].slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
             
             try {
-                // Create Keyshare from raw file data
-                debugLog(`Attempting to create Keyshare from file ${i + 1}...`);
-                const keyshare = Keyshare.fromBytes(files[i]);
+                // Extract keyshare data from vault file
+                debugLog(`Parsing vault file ${i + 1} to extract keyshare...`);
+                const keyshareData = parseVaultFromBytes(files[i]);
+                debugLog(`Extracted keyshare data, length: ${keyshareData.length} bytes`);
+                
+                // Create Keyshare from extracted keyshare data
+                debugLog(`Attempting to create Keyshare from extracted data for file ${i + 1}...`);
+                const keyshare = Keyshare.fromBytes(keyshareData);
                 
                 if (!keyshare) {
                     throw new Error(`Keyshare.fromBytes returned null/undefined for file ${i + 1}`);
