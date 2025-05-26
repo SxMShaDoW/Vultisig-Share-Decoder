@@ -218,7 +218,7 @@ func ProcessGG20Files(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 	for _, fileInfo := range fileInfos {
 		log.Printf("Processing GG20 file: %s", fileInfo.Name)
 
-		localStates, err := fileutils.ParseVault(fileInfo.Content)
+		localStates, err := ParseLocalState(fileInfo.Content)
 		if err != nil {
 			return fmt.Errorf("error processing file %s: %w", fileInfo.Name, err)
 		}
