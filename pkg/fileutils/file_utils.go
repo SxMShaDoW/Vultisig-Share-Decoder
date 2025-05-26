@@ -26,6 +26,31 @@ func IsBakFile(fileName string) bool {
   return strings.HasSuffix(fileName, ".bak") || strings.HasSuffix(fileName, ".vult")
 }
 
+// ParseVault attempts to parse vault content, handling both GG20 and DKLS formats
+func ParseVault(content []byte) (*v1.Vault, error) {
+	// Try direct protobuf unmarshaling first
+	vault := &v1.Vault{}
+	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
+		return vault, nil
+	}
+
+	// Try base64 decoding first
+	if decoded, err := base64.StdEncoding.DecodeString(string(content)); err == nil {
+		if err := proto.Unmarshal(decoded, vault); err == nil && vault.Name != "" {
+			return vault, nil
+		}
+		
+		// Try as vault container
+		var vaultContainer v1.VaultContainer
+		if err := proto.Unmarshal(decoded, &vaultContainer); err == nil {
+			// This is an encrypted vault container, needs password
+			return nil, fmt.Errorf("vault is encrypted and requires password")
+		}
+	}
+
+	return nil, fmt.Errorf("failed to parse vault: unrecognized format")
+}
+
 func ReadDataFileContent(inputFilePathName string) ([]byte, error) {
   filePathName, err := filepath.Abs(inputFilePathName)
   if err != nil {

@@ -21,6 +21,11 @@ import (
 
 // DetectSchemeType determines if the vault content is GG20 or DKLS
 func DetectSchemeType(content []byte) types.SchemeType {
+	// Try to decode as base64 first (common for vault files)
+	if decoded, err := base64.StdEncoding.DecodeString(string(content)); err == nil {
+		content = decoded
+	}
+
 	// Try to decode as protobuf (GG20 format)
 	vault := &v1.Vault{}
 	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
@@ -40,6 +45,24 @@ func DetectSchemeType(content []byte) types.SchemeType {
 			log.Printf("Detected DKLS scheme based on share_data field")
 			return types.DKLS
 		}
+		if _, hasPartyID := jsonData["party_id"]; hasPartyID {
+			log.Printf("Detected DKLS scheme based on party_id field")
+			return types.DKLS
+		}
+		// Check for typical DKLS share structure
+		if _, hasID := jsonData["id"]; hasID {
+			if _, hasThreshold := jsonData["threshold"]; hasThreshold {
+				log.Printf("Detected DKLS scheme based on share structure")
+				return types.DKLS
+			}
+		}
+	}
+
+	// Check if it's a vault container format
+	var vaultContainer v1.VaultContainer
+	if err := proto.Unmarshal(content, &vaultContainer); err == nil {
+		log.Printf("Detected GG20 scheme based on vault container structure")
+		return types.GG20
 	}
 
 	// Default to GG20 for backward compatibility
