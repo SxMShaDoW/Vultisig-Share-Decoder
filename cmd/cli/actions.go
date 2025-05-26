@@ -174,3 +174,68 @@ func DecryptFileAction(ctx *cli.Context) error {
 	}
 	return nil
 }
+
+func ProcessDKLSFiles(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
+	var outputBuilder strings.Builder
+	threshold := len(fileInfos) // For DKLS, typically use all shares
+
+	fmt.Fprintf(&outputBuilder, "=== DKLS Key Recovery ===\n")
+	fmt.Fprintf(&outputBuilder, "Processing %d DKLS files with threshold %d\n\n", len(fileInfos), threshold)
+
+	err := shared.ProcessDKLSFiles(fileInfos, &outputBuilder, threshold)
+	if err != nil {
+		return "", fmt.Errorf("error processing DKLS files: %w", err)
+	}
+
+	return outputBuilder.String(), nil
+}
+
+func ProcessGG20Files(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
+	var outputBuilder strings.Builder
+	var allSecret []types.TempLocalState
+
+	for i, fileInfo := range fileInfos {
+		password := ""
+		if i < len(passwords) {
+			password = passwords[i]
+		}
+
+		// Process as GG20 format
+		localStates, err := shared.ParseLocalState(fileInfo.Content)
+		if err != nil {
+			return "", fmt.Errorf("error processing file %s: %w", fileInfo.Name, err)
+		}
+
+		// Add share details to output
+		fmt.Fprintf(&outputBuilder, "Backup name: %s\n", fileInfo.Name)
+		if eddsaState, ok := localStates[types.EdDSA]; ok {
+			fmt.Fprintf(&outputBuilder, "This Share: %s\n", eddsaState.LocalPartyKey)
+			fmt.Fprintf(&outputBuilder, "All Shares: %v\n", eddsaState.KeygenCommitteeKeys)
+		}
+
+		allSecret = append(allSecret, types.TempLocalState{
+			FileName:   fileInfo.Name,
+			LocalState: localStates,
+			SchemeType: types.GG20,
+		})
+	}
+
+	if len(allSecret) == 0 {
+		return "", fmt.Errorf("no valid GG20 secrets found")
+	}
+
+	threshold := len(allSecret)
+	fmt.Fprintf(&outputBuilder, "\n=== Processing %d GG20 secrets with threshold %d ===\n", len(allSecret), threshold)
+
+	// Process ECDSA keys
+	if err := keyprocessing.GetKeys(threshold, allSecret, types.ECDSA, &outputBuilder); err != nil {
+		return "", fmt.Errorf("error processing ECDSA keys: %w", err)
+	}
+
+	// Process EdDSA keys  
+	if err := keyprocessing.GetKeys(threshold, allSecret, types.EdDSA, &outputBuilder); err != nil {
+		return "", fmt.Errorf("error processing EdDSA keys: %w", err)
+	}
+
+	return outputBuilder.String(), nil
+}
