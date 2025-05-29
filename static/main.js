@@ -159,30 +159,43 @@ function parseVaultFromBytes(fileData) {
     let keyshareData = null;
 
     // First, find the keyshares array in the vault
-    const keyshareField = findProtobufField(vaultData, 7); // Assuming keyshares is field 7
+    const keyshareField = findProtobufField(vaultData, 7); // keyshares is field 7
     if (keyshareField) {
         debugLog(`Found keyshares field, length: ${keyshareField.length}`);
 
-        // Iterate over keyshares
+        // Iterate over keyshares - each keyshare is a length-delimited field
         let offset = 0;
-        while (offset < keyshareField.length) {
-            const keyshareLengthInfo = readVarint(keyshareField, offset);
-            const keyshareLength = keyshareLengthInfo.value;
-            const keyshareBytesRead = keyshareLengthInfo.bytesRead;
-            offset += keyshareBytesRead;
+        while (offset < keyshareField.length - 10) {
+            try {
+                // Each keyshare starts with a field header (usually 0x0A for field 1, wire type 2)
+                if (keyshareField[offset] === 0x0A) { // Field 1, wire type 2 (length-delimited)
+                    offset++; // Skip field header
+                    
+                    const keyshareLengthInfo = readVarint(keyshareField, offset);
+                    const keyshareLength = keyshareLengthInfo.value;
+                    offset += keyshareLengthInfo.bytesRead;
 
-            if (keyshareLength > 0 && offset + keyshareLength <= keyshareField.length) {
-                const keyshareFieldData = keyshareField.slice(offset, offset + keyshareLength);
-                const extractedKeyshare = extractKeyshareFromProtobuf(keyshareFieldData);
-                if (extractedKeyshare) {
-                    keyshareData = extractedKeyshare;
-                    debugLog(`Extracted keyshare from protobuf message, length: ${keyshareData.length}`);
-                    break; // Found keyshare, stop iterating
+                    if (keyshareLength > 0 && offset + keyshareLength <= keyshareField.length) {
+                        const keyshareFieldData = keyshareField.slice(offset, offset + keyshareLength);
+                        debugLog(`Processing keyshare message of length: ${keyshareLength}`);
+                        
+                        const extractedKeyshare = extractKeyshareFromProtobuf(keyshareFieldData);
+                        if (extractedKeyshare && extractedKeyshare.length > 1000) {
+                            keyshareData = extractedKeyshare;
+                            debugLog(`Extracted keyshare from protobuf message, length: ${keyshareData.length}`);
+                            break; // Found valid keyshare, stop iterating
+                        }
+                        offset += keyshareLength;
+                    } else {
+                        debugLog(`Invalid keyshare length: ${keyshareLength} at offset: ${offset}`);
+                        break;
+                    }
+                } else {
+                    offset++; // Skip unknown bytes
                 }
-                offset += keyshareLength;
-            } else {
-                debugLog("Invalid keyshare length or offset");
-                break;
+            } catch (parseError) {
+                debugLog(`Error parsing keyshare at offset ${offset}: ${parseError.message}`);
+                offset++;
             }
         }
     }
@@ -259,13 +272,18 @@ function extractKeyshareFromProtobuf(keyshareFieldData) {
             if (length.value > 0 && offset + length.value <= keyshareFieldData.length) {
                 const keyshareBytes = keyshareFieldData.slice(offset, offset + length.value);
 
-                // For DKLS, try to decode as base64 first
+                // For DKLS, the keyshare data is base64 encoded string in protobuf
                 try {
                     const keyshareString = new TextDecoder().decode(keyshareBytes);
+                    debugLog(`Keyshare string length: ${keyshareString.length}`);
+                    
+                    // Decode the base64 string to get the actual keyshare bytes
                     const decoded = Uint8Array.from(atob(keyshareString), c => c.charCodeAt(0));
                     keyshareData = decoded;
                     debugLog(`Decoded DKLS keyshare from base64, length: ${keyshareData.length}`);
+                    debugLog(`First 32 bytes of decoded keyshare: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
                 } catch (e) {
+                    debugLog(`Base64 decode failed: ${e.message}, trying raw bytes`);
                     // If not base64, use raw bytes
                     keyshareData = keyshareBytes;
                     debugLog(`Using raw DKLS keyshare bytes, length: ${keyshareData.length}`);
@@ -588,7 +606,15 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
 
                 // Create Keyshare from extracted keyshare data
                 debugLog(`Attempting to create Keyshare from extracted data for file ${i + 1}...`);
-                const keyshare = Keyshare.fromBytes(keyshareData);
+                debugLog(`Keyshare data first 64 bytes: ${Array.from(keyshareData.slice(0, 64)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+                
+                let keyshare;
+                try {
+                    keyshare = Keyshare.fromBytes(keyshareData);
+                } catch (wasmError) {
+                    debugLog(`WASM Keyshare.fromBytes error: ${wasmError.message || wasmError}`);
+                    throw new Error(`WASM keyshare decode failed: ${wasmError.message || wasmError}`);
+                }
 
                 if (!keyshare) {
                     throw new Error(`Keyshare.fromBytes returned null/undefined for file ${i + 1}`);
