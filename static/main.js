@@ -427,7 +427,7 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         }
 
         const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        debugLog(`Extracted private key: ${privateKeyHex.substring(0, 16)}... (${privateKeyBytes.length} bytes)`);
+        debugLog(`Extracted private key: ${privateKeyHex}... (${privateKeyBytes.length} bytes)`);
 
         debugLog("Getting public key...");
         const publicKeyBytes = keyshares[0].publicKey();
@@ -449,6 +449,8 @@ Recovery successful: Yes
         `.trim();
 
         debugLog("DKLS processing completed successfully");
+        debugLog("Results:\n")
+        debugLog(results)
         displayResults(results);
 
     } catch (error) {
