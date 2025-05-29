@@ -1,8 +1,8 @@
 
 // Protobuf schema definitions for Vultisig vault structures
-// Based on vultisig/commondata protobuf definitions
+// Based on vultisig/commondata protobuf definitions using @bufbuild/protobuf
 
-import { proto3, Message, FieldList } from "@bufbuild/protobuf";
+import { proto3 } from "@bufbuild/protobuf";
 
 // VaultContainer message
 export const VaultContainerSchema = proto3.makeMessageType(
@@ -31,7 +31,7 @@ export const VaultSchema = proto3.makeMessageType(
     { no: 2, name: "public_key_ecdsa", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 3, name: "public_key_eddsa", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 4, name: "signers", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
-    { no: 5, name: "created_at", kind: "message", T: () => import("@bufbuild/protobuf").Timestamp },
+    { no: 5, name: "created_at", kind: "message", T: () => import("@bufbuild/protobuf/wkt").TimestampSchema },
     { no: 6, name: "hex_chain_code", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "key_shares", kind: "message", T: VaultKeyShareSchema, repeated: true },
     { no: 8, name: "local_party_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },

@@ -12,6 +12,11 @@ function debugLog(message) {
     debugOutput.innerHTML += `${timestamp}: ${message}\n`;
 }
 
+// Import protobuf functions and schemas
+import { fromBinary } from '@bufbuild/protobuf';
+import { VaultContainerSchema, VaultSchema } from './vault_pb.js';
+import { decryptWithAesGcm, fromBase64 } from './aes_gcm.js';
+
 // Initialize WASM modules
 const go = new Go();
 
@@ -134,7 +139,7 @@ async function parseAndDecryptVault(fileData, password) {
         let vaultContainerData = fileData;
         try {
             const base64String = new TextDecoder().decode(fileData);
-            const decoded = Uint8Array.from(atob(base64String), c => c.charCodeAt(0));
+            const decoded = fromBase64(base64String);
             if (decoded.length > 100) {
                 vaultContainerData = decoded;
                 debugLog("Successfully decoded base64 vault container data");
@@ -146,7 +151,7 @@ async function parseAndDecryptVault(fileData, password) {
         // Step 2: Parse as VaultContainer (encrypted vault)
         let vaultContainer;
         try {
-            vaultContainer = fromBinary(VaultContainerSchema, decodedBytes);
+            vaultContainer = fromBinary(VaultContainerSchema, vaultContainerData);
             debugLog(`Parsed VaultContainer - version: ${vaultContainer.version}, encrypted: ${vaultContainer.isEncrypted}`);
         } catch (error) {
             debugLog(`Failed to parse as VaultContainer: ${error.message}`);
@@ -173,40 +178,50 @@ async function parseAndDecryptVault(fileData, password) {
         }
 
         // Step 5: Parse the vault protobuf to extract keyshare
-        const vault = parseProtobufVault(new TextEncoder().encode(vaultData));
-        if (!vault) {
+        let vault;
+        try {
+            vault = fromBinary(VaultSchema, vaultData);
+            debugLog(`Parsed vault: ${vault.name}, keyshares: ${vault.keyShares.length}, libType: ${vault.libType}`);
+        } catch (error) {
+            debugLog(`Failed to parse vault protobuf: ${error.message}`);
             throw new Error("Could not parse vault protobuf");
         }
 
-        debugLog(`Parsed vault: ${vault.name}, keyshares: ${vault.keyshares.length}`);
-
         // Step 6: Extract keyshare data for DKLS
-        if (vault.keyshares.length === 0) {
+        if (vault.keyShares.length === 0) {
             throw new Error("No keyshares found in vault");
         }
 
-        // For DKLS, the keyshare data should be hex-encoded
-        const keyshareString = vault.keyshares[0].keyshare;
+        // For DKLS, we need the keyshare string (which should be hex or base64 encoded)
+        const keyshareString = vault.keyShares[0].keyshare;
         if (!keyshareString) {
             throw new Error("No keyshare data found");
         }
 
-        // Try to decode as hex
+        debugLog(`Found keyshare string: ${keyshareString.length} characters`);
+        debugLog(`Keyshare preview: ${keyshareString.substring(0, 100)}...`);
+
+        // Try to decode the keyshare string as hex first, then base64
         let keyshareData;
         try {
             if (/^[0-9a-fA-F]+$/.test(keyshareString.trim())) {
+                // Hex encoded
                 const hexStr = keyshareString.trim();
                 keyshareData = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                 debugLog(`Decoded keyshare from hex, length: ${keyshareData.length}`);
-            } else {
-                // Try base64
-                keyshareData = Uint8Array.from(atob(keyshareString), c => c.charCodeAt(0));
+            } else if (/^[A-Za-z0-9+/]+=*$/.test(keyshareString.trim())) {
+                // Base64 encoded
+                keyshareData = fromBase64(keyshareString.trim());
                 debugLog(`Decoded keyshare from base64, length: ${keyshareData.length}`);
+            } else {
+                // Use raw string bytes as fallback
+                keyshareData = new TextEncoder().encode(keyshareString);
+                debugLog(`Using raw keyshare string bytes, length: ${keyshareData.length}`);
             }
         } catch (e) {
             // Use raw string bytes as fallback
             keyshareData = new TextEncoder().encode(keyshareString);
-            debugLog(`Using raw keyshare string bytes, length: ${keyshareData.length}`);
+            debugLog(`Decoding failed, using raw string bytes, length: ${keyshareData.length}`);
         }
 
         if (keyshareData.length < 100) {
@@ -214,571 +229,14 @@ async function parseAndDecryptVault(fileData, password) {
         }
 
         debugLog(`Successfully extracted keyshare data, length: ${keyshareData.length} bytes`);
+        debugLog(`First 32 bytes: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+
         return keyshareData;
 
     } catch (error) {
         debugLog(`Vault parsing failed: ${error.message}`);
         throw new Error(`Failed to parse vault: ${error.message}`);
     }
-}
-
-// AES-GCM decryption function (following reference implementation)
-async function decryptVaultWithPassword(encryptedData, password) {
-    try {
-        // Hash password with SHA256 to create key
-        const encoder = new TextEncoder();
-        const passwordData = encoder.encode(password);
-        const keyMaterial = await crypto.subtle.digest('SHA-256', passwordData);
-
-        // Import key for AES-GCM
-        const key = await crypto.subtle.importKey(
-            'raw',
-            keyMaterial,
-            { name: 'AES-GCM' },
-            false,
-            ['decrypt']
-        );
-
-        // Extract nonce (first 12 bytes for GCM)
-        const nonce = encryptedData.slice(0, 12);
-        const ciphertext = encryptedData.slice(12);
-
-        debugLog(`Decrypting with nonce length: ${nonce.length}, ciphertext length: ${ciphertext.length}`);
-
-        // Decrypt
-        const decryptedBuffer = await crypto.subtle.decrypt(
-            {
-                name: 'AES-GCM',
-                iv: nonce
-            },
-            key,
-            ciphertext
-        );
-
-        return new Uint8Array(decryptedBuffer);
-    } catch (error) {
-        throw new Error(`Decryption failed: ${error.message}`);
-    }
-}
-
-function extractKeyshareFromProtobuf(keyshareFieldData) {
-    // Parse the keyshare protobuf message
-    // KeyShare has fields: public_key (1, string), keyshare (2, string)
-    let offset = 0;
-    let keyshareData = null;
-
-    debugLog(`Extracting keyshare from protobuf message, length: ${keyshareFieldData.length}`);
-    debugLog(`First 32 bytes: ${Array.from(keyshareFieldData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-
-    while (offset < keyshareFieldData.length - 10) {
-        const fieldHeader = keyshareFieldData[offset];
-        const wireType = fieldHeader & 0x07;
-        const fieldNumber = fieldHeader >>> 3;
-
-        debugLog(`At offset ${offset}: field ${fieldNumber}, wire type ${wireType}`);
-        offset++;
-
-        if (fieldNumber === 2 && wireType === 2) { // keyshare field
-            const lengthInfo = readVarint(keyshareFieldData, offset);
-            offset += lengthInfo.bytesRead;
-
-            debugLog(`Found keyshare field, length: ${lengthInfo.value}`);
-
-            if (lengthInfo.value > 0 && offset + lengthInfo.value <= keyshareFieldData.length) {
-                const keyshareBytes = keyshareFieldData.slice(offset, offset + lengthInfo.value);
-
-                // For DKLS, the keyshare data is hex-encoded string in protobuf
-                try {
-                    const keyshareString = new TextDecoder().decode(keyshareBytes);
-                    debugLog(`Keyshare string preview: ${keyshareString.substring(0, 100)}...`);
-
-                    // Check if it looks like hex-encoded
-                    if (/^[0-9a-fA-F]+$/.test(keyshareString.trim())) {
-                        debugLog("String appears to be hex-encoded, decoding...");
-                        const hexStr = keyshareString.trim();
-                        const decoded = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                        keyshareData = decoded;
-                        debugLog(`Decoded DKLS keyshare from hex, length: ${keyshareData.length}`);
-                        debugLog(`First 32 bytes of decoded keyshare: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-                        return keyshareData; // Return immediately if we found and decoded successfully
-                    } else if (/^[A-Za-z0-9+/]+=*$/.test(keyshareString.trim())) {
-                        // Check if it looks like base64
-                        debugLog("String appears to be base64, decoding...");
-                        const decoded = Uint8Array.from(atob(keyshareString), c => c.charCodeAt(0));
-                        keyshareData = decoded;
-                        debugLog(`Decoded DKLS keyshare from base64, length: ${keyshareData.length}`);
-                        debugLog(`First 32 bytes of decoded keyshare: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-                        return keyshareData; // Return immediately if we found and decoded successfully
-                    } else {
-                        debugLog("String doesn't look like base64 or hex, using as binary");
-                        keyshareData = keyshareBytes;
-                        return keyshareData; // Return the raw bytes
-                    }
-                } catch (e) {
-                    debugLog(`String decode failed: ${e.message}, trying raw bytes`);
-                    // If not base64, use raw bytes
-                    keyshareData = keyshareBytes;
-                    debugLog(`Using raw DKLS keyshare bytes, length: ${keyshareData.length}`);
-                    return keyshareData;
-                }
-            }
-        } else if (wireType === 2) {
-            // Skip other string fields
-            const lengthInfo = readVarint(keyshareFieldData, offset);
-            offset += lengthInfo.bytesRead;
-            debugLog(`Skipping field ${fieldNumber}, length: ${lengthInfo.value}`);
-            offset += lengthInfo.value;
-        } else if (wireType === 0) {
-            // Skip varint fields
-            const varintInfo = readVarint(keyshareFieldData, offset);
-            offset += varintInfo.bytesRead;
-            debugLog(`Skipping varint field ${fieldNumber}, value: ${varintInfo.value}`);
-        } else {
-            offset++;
-        }
-    }
-
-    // If we didn't find field 2, try to decode the entire message as hex
-    if (!keyshareData) {
-        debugLog("No keyshare field found, trying to decode the entire message as hex...");
-
-        try {
-            // Skip the protobuf header (0a 42) and decode the payload as hex
-            let hexStr;
-            if (keyshareFieldData[0] === 0x0a && keyshareFieldData[1] === 0x42) {
-                // Skip protobuf field header
-                hexStr = new TextDecoder().decode(keyshareFieldData.slice(2));
-            } else {
-                hexStr = new TextDecoder().decode(keyshareFieldData);
-            }
-
-            debugLog(`Attempting to decode as hex string: ${hexStr.substring(0, 100)}...`);
-
-            if (/^[0-9a-fA-F]+$/.test(hexStr.trim())) {
-                const decoded = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                keyshareData = decoded;
-                debugLog(`Successfully decoded entire message as hex, final size: ${keyshareData.length}`);
-                debugLog(`First 32 bytes: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-                return keyshareData;
-            }
-        } catch (e) {
-            debugLog(`Hex decode of entire message failed: ${e.message}`);
-        }
-    }
-
-    return keyshareData;
-}
-
-function parseProtobufVault(bytes) {
-    let offset = 0;
-    const vault = {
-        name: '',
-        localPartyId: 'party_0',
-        publicKeyEcdsa: '',
-        publicKeyEddsa: '',
-        keyshares: [],
-        libType: 0,
-        resharePrefix: ''
-    };
-
-    debugLog(`Parsing vault protobuf, total bytes: ${bytes.length}`);
-
-    while (offset < bytes.length - 1) {
-        if (offset >= bytes.length) break;
-
-        const fieldHeader = bytes[offset];
-        const wireType = fieldHeader & 0x07;
-        const fieldNumber = fieldHeader >>> 3;
-
-        debugLog(`Field ${fieldNumber}, wire type ${wireType} at offset ${offset}`);
-        offset++;
-
-        if (fieldNumber === 1 && wireType === 2) { // name (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const nameBytes = bytes.slice(offset, offset + length.value);
-                vault.name = new TextDecoder().decode(nameBytes);
-                debugLog(`Found vault name: ${vault.name}`);
-                offset += length.value;
-            }
-        } else if (fieldNumber === 8 && wireType === 2) { // local_party_id (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const partyIdBytes = bytes.slice(offset, offset + length.value);
-                vault.localPartyId = new TextDecoder().decode(partyIdBytes);
-                debugLog(`Found local party ID: ${vault.localPartyId}`);
-                offset += length.value;
-            }
-        } else if (fieldNumber === 2 && wireType === 2) { // public_key_ecdsa (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const publicKeyEcdsaBytes = bytes.slice(offset, offset + length.value);
-                vault.publicKeyEcdsa = new TextDecoder().decode(publicKeyEcdsaBytes);
-                debugLog(`Found ECDSA public key: ${vault.publicKeyEcdsa}`);
-                offset += length.value;
-            }
-        } else if (fieldNumber === 3 && wireType === 2) { // public_key_eddsa (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const publicKeyEddsaBytes = bytes.slice(offset, offset + length.value);
-                vault.publicKeyEddsa = new TextDecoder().decode(publicKeyEddsaBytes);
-                debugLog(`Found EdDSA public key: ${vault.publicKeyEddsa}`);
-                offset += length.value;
-            }
-        } else if (fieldNumber === 7 && wireType === 2) { // keyshares (repeated)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            debugLog(`Found keyshares field, length: ${length.value}`);
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const keyshareBytes = bytes.slice(offset, offset + length.value);
-                debugLog(`Keyshare bytes preview: ${Array.from(keyshareBytes.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-
-                const keyshare = parseProtobufKeyshare(keyshareBytes);
-                if (keyshare) {
-                    vault.keyshares.push(keyshare);
-                    debugLog(`Successfully parsed keyshare: ${keyshare.keyshare.length} bytes`);
-                } else {
-                    debugLog("Failed to parse keyshare, trying alternative parsing...");
-                    // Try to extract keyshare data directly
-                    const altKeyshare = extractKeyshareFromProtobuf(keyshareBytes);
-                    if (altKeyshare && altKeyshare.length > 0) {
-                        vault.keyshares.push({
-                            publicKey: vault.publicKeyEcdsa || '',
-                            keyshare: new TextDecoder().decode(altKeyshare)
-                        });
-                        debugLog(`Alternative keyshare extraction successful: ${altKeyshare.length} bytes`);
-                    }
-                }
-                offset += length.value;
-            }
-        } else if (fieldNumber === 10 && wireType === 0) { // lib_type (enum)
-            const libType = readVarint(bytes, offset);
-            vault.libType = libType.value;
-            debugLog(`Found lib type: ${vault.libType}`);
-            offset += libType.bytesRead;
-        } else if (fieldNumber === 9 && wireType === 2) { // reshare_prefix (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const resharePrefixBytes = bytes.slice(offset, offset + length.value);
-                vault.resharePrefix = new TextDecoder().decode(resharePrefixBytes);
-                debugLog(`Found reshare prefix: ${vault.resharePrefix}`);
-                offset += length.value;
-            }
-        } else if (wireType === 2) {
-            // Skip unknown string/bytes fields but log them
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-            debugLog(`Skipping unknown field ${fieldNumber}, length: ${length.value}`);
-
-            // If this is a large field that might contain keyshare data, investigate
-            if (length.value > 1000 && fieldNumber !== 7) {
-                debugLog(`Large unknown field ${fieldNumber} might contain keyshare data`);
-                const fieldData = bytes.slice(offset, offset + length.value);
-                const altKeyshare = extractKeyshareFromProtobuf(fieldData);
-                if (altKeyshare && altKeyshare.length > 0) {
-                    vault.keyshares.push({
-                        publicKey: vault.publicKeyEcdsa || '',
-                        keyshare: new TextDecoder().decode(altKeyshare)
-                    });
-                    debugLog(`Found keyshare in unknown field ${fieldNumber}: ${altKeyshare.length} bytes`);
-                }
-            }
-
-            offset += length.value;
-        } else if (wireType === 0) {
-            const varint = readVarint(bytes, offset);
-            debugLog(`Skipping varint field ${fieldNumber}, value: ${varint.value}`);
-            offset += varint.bytesRead;
-        } else {
-            debugLog(`Skipping unknown wire type ${wireType} for field ${fieldNumber}`);
-            offset++;
-        }
-    }
-
-    debugLog(`Vault parsing complete. Found ${vault.keyshares.length} keyshares`);
-    return vault;
-}
-
-function parseProtobufKeyshare(bytes) {
-    let offset = 0;
-    const keyshare = {
-        publicKey: '',
-        keyshare: ''
-    };
-
-    debugLog(`Parsing keyshare protobuf, ${bytes.length} bytes`);
-
-    while (offset < bytes.length - 1) {
-        if (offset >= bytes.length) break;
-
-        const fieldHeader = bytes[offset];
-        const wireType = fieldHeader & 0x07;
-        const fieldNumber = fieldHeader >>> 3;
-
-        debugLog(`Keyshare field ${fieldNumber}, wire type ${wireType} at offset ${offset}`);
-        offset++;
-
-        if (fieldNumber === 1 && wireType === 2) { // public_key (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const publicKeyBytes = bytes.slice(offset, offset + length.value);
-                keyshare.publicKey = new TextDecoder().decode(publicKeyBytes);
-                debugLog(`Found keyshare public key: ${keyshare.publicKey}`);
-                offset += length.value;
-            }
-        } else if (fieldNumber === 2 && wireType === 2) { // keyshare (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            debugLog(`Found keyshare data field, length: ${length.value}`);
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const keyshareBytes = bytes.slice(offset, offset + length.value);
-
-                try {
-                    keyshare.keyshare = new TextDecoder().decode(keyshareBytes);
-                    debugLog(`Successfully decoded keyshare as string: ${keyshare.keyshare.length} chars`);
-                } catch (e) {
-                    // If it's not valid UTF-8, store as hex string
-                    keyshare.keyshare = Array.from(keyshareBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-                    debugLog(`Stored keyshare as hex string: ${keyshare.keyshare.length} chars`);
-                }
-                offset += length.value;
-            }
-        } else if (wireType === 2) {
-            // Skip unknown string fields but log them
-            const length = readVarint(bytes, offset);
-            debugLog(`Skipping unknown keyshare field ${fieldNumber}, length: ${length.value}`);
-
-            // If this is a large field, it might be the actual keyshare data
-            if (length.value > 1000) {
-                debugLog(`Large unknown field ${fieldNumber} might be keyshare data`);
-                const fieldData = bytes.slice(offset, offset + length.value);
-                try {
-                    const stringData = new TextDecoder().decode(fieldData);
-                    if (!keyshare.keyshare && stringData.length > 100) {
-                        keyshare.keyshare = stringData;
-                        debugLog(`Used unknown field ${fieldNumber} as keyshare data`);
-                    }
-                } catch (e) {
-                    // If not valid UTF-8, try as hex
-                    const hexData = Array.from(fieldData).map(b => b.toString(16).padStart(2, '0')).join('');
-                    if (!keyshare.keyshare && hexData.length > 100) {
-                        keyshare.keyshare = hexData;
-                        debugLog(`Used unknown field ${fieldNumber} as hex keyshare data`);
-                    }
-                }
-            }
-
-            offset += length.bytesRead + length.value;
-        } else if (wireType === 0) {
-            const varint = readVarint(bytes, offset);
-            debugLog(`Skipping keyshare varint field ${fieldNumber}, value: ${varint.value}`);
-            offset += varint.bytesRead;
-        } else {
-            debugLog(`Skipping unknown keyshare wire type ${wireType} for field ${fieldNumber}`);
-            offset++;
-        }
-    }
-
-    debugLog(`Keyshare parsing result: publicKey=${keyshare.publicKey}, keyshare length=${keyshare.keyshare.length}`);
-    return keyshare.keyshare ? keyshare : null;
-}
-
-// Helper function to find a specific protobuf field
-function findProtobufField(data, fieldNumber) {
-    let offset = 0;
-
-    while (offset < data.length - 10) {
-        const fieldHeader = data[offset];
-        const wireType = fieldHeader & 0x07;
-        const currentFieldNumber = fieldHeader >>> 3;
-
-        offset++;
-
-        if (wireType === 2) { // Length-delimited field
-            const lengthInfo = readVarint(data, offset);
-            offset += lengthInfo.bytesRead;
-
-            if (currentFieldNumber === fieldNumber && lengthInfo.value > 0 && 
-                offset + lengthInfo.value <= data.length) {
-                return data.slice(offset, offset + lengthInfo.value);
-            }
-
-            offset += lengthInfo.value;
-        } else {
-            // Skip other wire types
-            offset++;
-        }
-    }
-
-    return null;
-}
-
-// Helper function to extract actual keyshare bytes from keyshare protobuf message
-function findKeyshareBytes(keyshareMessage) {
-    let offset = 0;
-
-    while (offset < keyshareMessage.length - 10) {
-        const fieldHeader = keyshareMessage[offset];
-        const wireType = fieldHeader & 0x07;
-        const fieldNumber = fieldHeader >>> 3;
-
-        offset++;
-
-        if (wireType === 2) { // Length-delimited field
-            const lengthInfo = readVarint(keyshareMessage, offset);
-            offset += lengthInfo.bytesRead;
-
-            if (lengthInfo.value > 1000 && lengthInfo.value < 50000 && 
-                offset + lengthInfo.value <= keyshareMessage.length) {
-
-                const fieldData = keyshareMessage.slice(offset, offset + lengthInfo.value);
-
-                // Check if this looks like actual keyshare bytes (not string data)
-                if (isLikelyKeyshareBytes(fieldData)) {
-                    debugLog(`Found keyshare bytes at field ${fieldNumber}, length: ${lengthInfo.value}`);
-                    return fieldData;
-                }
-            }
-
-            offset += lengthInfo.value;
-        } else {
-            offset++;
-        }
-    }
-
-    return null;
-}
-
-// Helper function to read protobuf varint
-function readVarint(data, offset) {
-    let value = 0;
-    let shift = 0;
-    let bytesRead = 0;
-
-    while (offset + bytesRead < data.length && bytesRead < 10) { // Allow up to 10 bytes for large varints
-        const byte = data[offset + bytesRead];
-        bytesRead++;
-        value |= (byte & 0x7F) << shift;
-        if ((byte & 0x80) === 0) break;
-        shift += 7;
-    }
-
-    return { value, bytesRead };
-}
-
-
-
-// Helper function to check if data looks like keyshare bytes
-function isLikelyKeyshareBytes(data) {
-    if (data.length < 1000) return false;
-
-    // Check entropy - keyshare data should have good entropy
-    const uniqueBytes = new Set(data.slice(0, 256));
-    if (uniqueBytes.size < 100) return false; // Low entropy
-
-    // Check if it's not obviously text data
-    let textLikeCount = 0;
-    for (let i = 0; i < Math.min(100, data.length); i++) {
-        const byte = data[i];
-        if ((byte >= 32 && byte <= 126) || byte === 10 || byte === 13) {
-            textLikeCount++;
-        }
-    }
-
-    // If more than 80% looks like text, it's probably not keyshare bytes
-    return textLikeCount / Math.min(100, data.length) < 0.8;
-}
-
-// Fallback function to find keyshare data using pattern matching
-function findKeyshareDataFallback(vaultData) {
-    debugLog("Using fallback keyshare detection");
-
-    let offset = 0;
-    let bestCandidate = null;
-    let bestScore = 0;
-
-    while (offset < vaultData.length - 10) {
-        const fieldHeader = vaultData[offset];
-        const wireType = fieldHeader & 0x07;
-
-        if (wireType === 2) { // Length-delimited field
-            offset++;
-
-            const lengthInfo = readVarint(vaultData, offset);
-            offset += lengthInfo.bytesRead;
-
-            if (lengthInfo.value > 1000 && lengthInfo.value < 100000 && 
-                offset + lengthInfo.value <= vaultData.length) {
-
-                const candidate = vaultData.slice(offset, offset + lengthInfo.value);
-                const score = scoreKeyshareCandidate(candidate);
-
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestCandidate = candidate;
-                    debugLog(`New best keyshare candidate, score: ${score}, length: ${lengthInfo.value}`);
-                }
-            }
-
-            offset += lengthInfo.value;
-        } else {
-            offset++;
-        }
-    }
-
-    return bestCandidate;
-}
-
-// Score a potential keyshare candidate
-function scoreKeyshareCandidate(data) {
-    let score = 0;
-
-    // Size scoring
-    if (data.length > 5000 && data.length < 50000) score += 20;
-    if (data.length > 10000 && data.length < 30000) score += 10;
-
-    // Entropy scoring
-    const uniqueBytes = new Set(data.slice(0, 1000));
-    if (uniqueBytes.size > 200) score += 30;
-    if (uniqueBytes.size > 150) score += 10;
-
-    // Not text data
-    let textBytes = 0;
-    for (let i = 0; i < Math.min(500, data.length); i++) {
-        const byte = data[i];
-        if ((byte >= 32 && byte <= 126) || byte === 10 || byte === 13) {
-            textBytes++;
-        }
-    }
-    const textRatio = textBytes / Math.min(500, data.length);
-    if (textRatio < 0.3) score += 20;
-    if (textRatio < 0.5) score += 10;
-
-    // Binary patterns that suggest cryptographic data
-    let nullBytes = 0;
-    for (let i = 0; i < Math.min(100, data.length); i++) {
-        if (data[i] === 0) nullBytes<previous_generation>```text
-s++;
-    }
-    if (nullBytes < 10) score += 10; // Some nulls are okay, too many suggest padding
-
-    return score;
 }
 
 async function processDKLSWithWASM(files, passwords, fileNames) {
