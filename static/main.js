@@ -128,7 +128,7 @@ window.copyToClipboard = copyToClipboard;
 // Parse and decrypt vault container following the reference implementation pattern
 async function parseAndDecryptVault(fileData, password) {
     debugLog("Starting vault container parsing and decryption...");
-    
+
     try {
         // Step 1: Try to decode as base64 if it's a string
         let vaultContainerData = fileData;
@@ -143,51 +143,33 @@ async function parseAndDecryptVault(fileData, password) {
             debugLog("Not base64 encoded, using raw data");
         }
 
-        // Step 2: Parse as VaultContainer protobuf
-        const vaultContainer = parseProtobufVaultContainer(vaultContainerData);
-        if (!vaultContainer) {
-            throw new Error("Could not parse as VaultContainer protobuf");
+        // Step 2: Parse as VaultContainer (encrypted vault)
+        let vaultContainer;
+        try {
+            vaultContainer = fromBinary(VaultContainerSchema, decodedBytes);
+            debugLog(`Parsed VaultContainer - version: ${vaultContainer.version}, encrypted: ${vaultContainer.isEncrypted}`);
+        } catch (error) {
+            debugLog(`Failed to parse as VaultContainer: ${error.message}`);
+            throw new Error("Could not parse file as VaultContainer");
         }
 
-        debugLog(`Parsed VaultContainer - version: ${vaultContainer.version}, encrypted: ${vaultContainer.isEncrypted}`);
-
-        // Step 3: Get vault data (base64 string in the container)
-        let vaultData = vaultContainer.vault;
-        if (!vaultData) {
-            throw new Error("No vault data found in container");
+        // Step 3: Check if vault is encrypted
+        if (!vaultContainer.isEncrypted) {
+            throw new Error("Vault is not encrypted - this shouldn't happen for .vult files");
         }
 
-        // Step 4: If encrypted, decrypt using password
-        if (vaultContainer.isEncrypted) {
-            if (!password) {
-                throw new Error("Vault is encrypted but no password provided");
-            }
-            
-            debugLog("Vault is encrypted, attempting decryption...");
-            try {
-                // Decode the base64 vault data first
-                const encryptedVaultBytes = Uint8Array.from(atob(vaultData), c => c.charCodeAt(0));
-                
-                // Decrypt using AES-GCM with SHA256(password) as key
-                const decryptedVaultBytes = await decryptVaultWithPassword(encryptedVaultBytes, password);
-                
-                // The decrypted data should be the vault protobuf
-                vaultData = new TextDecoder().decode(decryptedVaultBytes);
-                debugLog("Successfully decrypted vault data");
-            } catch (decryptError) {
-                debugLog(`Decryption failed: ${decryptError.message}`);
-                throw new Error(`Failed to decrypt vault: ${decryptError.message}`);
-            }
-        } else {
-            debugLog("Vault is not encrypted, proceeding with direct parsing");
-            // For unencrypted vaults, decode base64 to get protobuf bytes
-            try {
-                const vaultBytes = Uint8Array.from(atob(vaultData), c => c.charCodeAt(0));
-                vaultData = new TextDecoder().decode(vaultBytes);
-            } catch (e) {
-                // If not base64, use as is
-                debugLog("Vault data is not base64, using directly");
-            }
+        // Step 4: Decrypt the vault using password
+        let vaultData;
+        try {
+            const encryptedVaultBytes = fromBase64(vaultContainer.vault);
+            vaultData = await decryptWithAesGcm({
+                key: password,
+                value: encryptedVaultBytes
+            });
+            debugLog(`Successfully decrypted vault, ${vaultData.length} bytes`);
+        } catch (error) {
+            debugLog(`Decryption failed: ${error.message}`);
+            throw new Error(`Failed to decrypt vault: ${error.message}`);
         }
 
         // Step 5: Parse the vault protobuf to extract keyshare
@@ -247,7 +229,7 @@ async function decryptVaultWithPassword(encryptedData, password) {
         const encoder = new TextEncoder();
         const passwordData = encoder.encode(password);
         const keyMaterial = await crypto.subtle.digest('SHA-256', passwordData);
-        
+
         // Import key for AES-GCM
         const key = await crypto.subtle.importKey(
             'raw',
@@ -277,56 +259,6 @@ async function decryptVaultWithPassword(encryptedData, password) {
     } catch (error) {
         throw new Error(`Decryption failed: ${error.message}`);
     }
-}
-
-function parseProtobufVaultContainer(bytes) {
-    let offset = 0;
-    const container = {
-        version: 0,
-        vault: '',
-        isEncrypted: false
-    };
-
-    while (offset < bytes.length - 1) {
-        if (offset >= bytes.length) break;
-        
-        const fieldHeader = bytes[offset];
-        const wireType = fieldHeader & 0x07;
-        const fieldNumber = fieldHeader >>> 3;
-
-        offset++;
-
-        if (fieldNumber === 1 && wireType === 0) { // version (varint)
-            const version = readVarint(bytes, offset);
-            container.version = version.value;
-            offset += version.bytesRead;
-        } else if (fieldNumber === 2 && wireType === 2) { // vault (string)
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead;
-
-            if (length.value > 0 && offset + length.value <= bytes.length) {
-                const vaultBytes = bytes.slice(offset, offset + length.value);
-                container.vault = new TextDecoder().decode(vaultBytes);
-                offset += length.value;
-            }
-        } else if (fieldNumber === 3 && wireType === 0) { // isEncrypted (bool)
-            const encrypted = readVarint(bytes, offset);
-            container.isEncrypted = encrypted.value !== 0;
-            offset += encrypted.bytesRead;
-        } else if (wireType === 2) {
-            // Skip unknown string fields
-            const length = readVarint(bytes, offset);
-            offset += length.bytesRead + length.value;
-        } else if (wireType === 0) {
-            // Skip unknown varint fields
-            const varint = readVarint(bytes, offset);
-            offset += varint.bytesRead;
-        } else {
-            offset++;
-        }
-    }
-
-    return container.vault ? container : null;
 }
 
 function extractKeyshareFromProtobuf(keyshareFieldData) {
@@ -359,7 +291,7 @@ function extractKeyshareFromProtobuf(keyshareFieldData) {
                 try {
                     const keyshareString = new TextDecoder().decode(keyshareBytes);
                     debugLog(`Keyshare string preview: ${keyshareString.substring(0, 100)}...`);
-                    
+
                     // Check if it looks like hex-encoded
                     if (/^[0-9a-fA-F]+$/.test(keyshareString.trim())) {
                         debugLog("String appears to be hex-encoded, decoding...");
@@ -409,7 +341,7 @@ function extractKeyshareFromProtobuf(keyshareFieldData) {
     // If we didn't find field 2, try to decode the entire message as hex
     if (!keyshareData) {
         debugLog("No keyshare field found, trying to decode the entire message as hex...");
-        
+
         try {
             // Skip the protobuf header (0a 42) and decode the payload as hex
             let hexStr;
@@ -419,9 +351,9 @@ function extractKeyshareFromProtobuf(keyshareFieldData) {
             } else {
                 hexStr = new TextDecoder().decode(keyshareFieldData);
             }
-            
+
             debugLog(`Attempting to decode as hex string: ${hexStr.substring(0, 100)}...`);
-            
+
             if (/^[0-9a-fA-F]+$/.test(hexStr.trim())) {
                 const decoded = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                 keyshareData = decoded;
@@ -453,7 +385,7 @@ function parseProtobufVault(bytes) {
 
     while (offset < bytes.length - 1) {
         if (offset >= bytes.length) break;
-        
+
         const fieldHeader = bytes[offset];
         const wireType = fieldHeader & 0x07;
         const fieldNumber = fieldHeader >>> 3;
@@ -510,7 +442,7 @@ function parseProtobufVault(bytes) {
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const keyshareBytes = bytes.slice(offset, offset + length.value);
                 debugLog(`Keyshare bytes preview: ${Array.from(keyshareBytes.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-                
+
                 const keyshare = parseProtobufKeyshare(keyshareBytes);
                 if (keyshare) {
                     vault.keyshares.push(keyshare);
@@ -549,7 +481,7 @@ function parseProtobufVault(bytes) {
             const length = readVarint(bytes, offset);
             offset += length.bytesRead;
             debugLog(`Skipping unknown field ${fieldNumber}, length: ${length.value}`);
-            
+
             // If this is a large field that might contain keyshare data, investigate
             if (length.value > 1000 && fieldNumber !== 7) {
                 debugLog(`Large unknown field ${fieldNumber} might contain keyshare data`);
@@ -563,7 +495,7 @@ function parseProtobufVault(bytes) {
                     debugLog(`Found keyshare in unknown field ${fieldNumber}: ${altKeyshare.length} bytes`);
                 }
             }
-            
+
             offset += length.value;
         } else if (wireType === 0) {
             const varint = readVarint(bytes, offset);
@@ -590,7 +522,7 @@ function parseProtobufKeyshare(bytes) {
 
     while (offset < bytes.length - 1) {
         if (offset >= bytes.length) break;
-        
+
         const fieldHeader = bytes[offset];
         const wireType = fieldHeader & 0x07;
         const fieldNumber = fieldHeader >>> 3;
@@ -616,7 +548,7 @@ function parseProtobufKeyshare(bytes) {
 
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const keyshareBytes = bytes.slice(offset, offset + length.value);
-                
+
                 try {
                     keyshare.keyshare = new TextDecoder().decode(keyshareBytes);
                     debugLog(`Successfully decoded keyshare as string: ${keyshare.keyshare.length} chars`);
@@ -631,7 +563,7 @@ function parseProtobufKeyshare(bytes) {
             // Skip unknown string fields but log them
             const length = readVarint(bytes, offset);
             debugLog(`Skipping unknown keyshare field ${fieldNumber}, length: ${length.value}`);
-            
+
             // If this is a large field, it might be the actual keyshare data
             if (length.value > 1000) {
                 debugLog(`Large unknown field ${fieldNumber} might be keyshare data`);
@@ -651,7 +583,7 @@ function parseProtobufKeyshare(bytes) {
                     }
                 }
             }
-            
+
             offset += length.bytesRead + length.value;
         } else if (wireType === 0) {
             const varint = readVarint(bytes, offset);
@@ -841,7 +773,8 @@ function scoreKeyshareCandidate(data) {
     // Binary patterns that suggest cryptographic data
     let nullBytes = 0;
     for (let i = 0; i < Math.min(100, data.length); i++) {
-        if (data[i] === 0) nullBytes++;
+        if (data[i] === 0) nullBytes<previous_generation>```text
+s++;
     }
     if (nullBytes < 10) score += 10; // Some nulls are okay, too many suggest padding
 
