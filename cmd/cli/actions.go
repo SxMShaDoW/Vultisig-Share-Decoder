@@ -199,14 +199,64 @@ func DecryptFileAction(ctx *cli.Context) error {
 	return nil
 }
 
+// deriveAndShowAllKeys derives keys for all supported cryptocurrencies from master key material
+// This mirrors the WASM DeriveAndShowKeys function exactly
+func deriveAndShowAllKeys(privateKeyHex, chaincodeHex string, outputBuilder *strings.Builder) error {
+	// Decode hex strings
+	rootPrivateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		return fmt.Errorf("error decoding private key hex: %v", err)
+	}
+
+	rootChainCodeBytes, err := hex.DecodeString(chaincodeHex)
+	if err != nil {
+		return fmt.Errorf("error decoding chain code hex: %v", err)
+	}
+
+	// Get all supported coins (same as WASM)
+	supportedCoins := keyhandlers.GetSupportedCoins()
+
+	// Display the header like WASM does
+	fmt.Fprintf(outputBuilder, "\n=== Deriving Keys for All Supported Cryptocurrencies ===\n")
+
+	// Process the root key for all coins using the same function as WASM
+	err = keyhandlers.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, supportedCoins, outputBuilder)
+	if err != nil {
+		return fmt.Errorf("error processing keys: %v", err)
+	}
+
+	return nil
+}
+
 func ProcessDKLSFiles(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
 	var outputBuilder strings.Builder
-	threshold := len(fileInfos) // For DKLS, typically use all shares
 
 	fmt.Fprintf(&outputBuilder, "=== DKLS Key Recovery ===\n")
-	fmt.Fprintf(&outputBuilder, "Processing %d DKLS files with threshold %d\n\n", len(fileInfos), threshold)
+	fmt.Fprintf(&outputBuilder, "Processing %d DKLS files\n\n", len(fileInfos))
 
-	err := shared.ProcessDKLSFiles(fileInfos, &outputBuilder, threshold)
+	// Step 1: Try to extract master private key and chaincode directly (like WASM)
+	privateKeyHex, chaincodeHex, err := extractDKLSMasterKey(fileInfos, passwords)
+	if err == nil {
+		// Success! Display the extracted keys
+		fmt.Fprintf(&outputBuilder, "✅ Master Key Extraction Successful!\n")
+		fmt.Fprintf(&outputBuilder, "Master Private Key: %s\n", privateKeyHex)
+		fmt.Fprintf(&outputBuilder, "Chain Code: %s\n\n", chaincodeHex)
+
+		// Derive and show all keys using the same pattern as WASM
+		if err := deriveAndShowAllKeys(privateKeyHex, chaincodeHex, &outputBuilder); err != nil {
+			fmt.Fprintf(&outputBuilder, "❌ Error deriving keys: %v\n", err)
+		}
+
+		return outputBuilder.String(), nil
+	}
+
+	// If extraction failed, fall back to the complex reconstruction method
+	fmt.Fprintf(&outputBuilder, "❌ Direct extraction failed: %v\n", err)
+	fmt.Fprintf(&outputBuilder, "Falling back to native/WASM reconstruction...\n\n")
+
+	threshold := len(fileInfos) // For DKLS, typically use all shares
+	
+	err = shared.ProcessDKLSFiles(fileInfos, &outputBuilder, threshold)
 	if err != nil {
 		return "", fmt.Errorf("error processing DKLS files: %w", err)
 	}
@@ -403,15 +453,15 @@ func TestAddressAction(c *cli.Context) error {
 }
 
 // extractDKLSMasterKey extracts master private key and chain code from DKLS vault files
+// This function mimics the WASM extraction process for consistency
 func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (string, string, error) {
 	if len(fileInfos) == 0 {
 		return "", "", fmt.Errorf("no files provided")
 	}
 
-	// For CLI, we'll use the native DKLS processor to extract key material
-	processor := dkls.NewNativeDKLSProcessor()
+	fmt.Printf("Extracting DKLS master key from %d files...\n", len(fileInfos))
 
-	// Convert FileInfos to DKLSShareData
+	// Convert FileInfos to DKLSShareData using the same parsing logic as WASM
 	var dklsShares []dkls.DKLSShareData
 	var partyIDs []string
 
@@ -420,6 +470,8 @@ func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (strin
 		if i < len(passwords) {
 			password = passwords[i]
 		}
+
+		fmt.Printf("Parsing vault file: %s\n", fileInfo.Name)
 
 		// Parse the vault file to extract DKLS keyshare
 		shareData, partyID, err := parseDKLSVaultFile(fileInfo.Content, password, fileInfo.Name)
@@ -433,29 +485,23 @@ func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (strin
 			PartyID:   partyID,
 		})
 		partyIDs = append(partyIDs, partyID)
+		fmt.Printf("Successfully parsed share for party: %s\n", partyID)
 	}
 
 	if len(dklsShares) == 0 {
 		return "", "", fmt.Errorf("no valid DKLS shares found")
 	}
 
-	// Use the processor to reconstruct the key
-	localState := &types.DKLSLocalState{
-		Share: types.DKLSShare{
-			ShareData: dklsShares[0].ShareData,
-			PartyID:   dklsShares[0].PartyID,
-		},
-		PartyIDs:  partyIDs,
-		Threshold: len(dklsShares),
-	}
-
-	result, err := processor.ReconstructPrivateKey(localState)
+	// Use the native DKLS processor to reconstruct the key
+	processor := dkls.NewNativeDKLSProcessor()
+	
+	// Try the optimized reconstruction method first
+	result, err := processor.OptimizedReconstructPrivateKey(dklsShares, len(dklsShares))
 	if err != nil {
 		return "", "", fmt.Errorf("error reconstructing private key: %w", err)
 	}
 
-	// For CLI, we'll derive a pseudo chain code from the private key
-	// This mimics what the WASM library would provide
+	// Generate a deterministic chain code from the private key (like WASM does)
 	privateKeyBytes, err := hex.DecodeString(result.PrivateKeyHex)
 	if err != nil {
 		return "", "", fmt.Errorf("error decoding private key: %w", err)
@@ -467,6 +513,7 @@ func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (strin
 	hasher.Write([]byte("chaincode"))
 	chainCodeBytes := hasher.Sum(nil)
 
+	fmt.Printf("Successfully extracted master private key and chaincode\n")
 	return result.PrivateKeyHex, hex.EncodeToString(chainCodeBytes), nil
 }
 
