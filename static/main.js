@@ -438,6 +438,32 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         const rootChainCodeHex = Array.from(rootChainCodeBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         debugLog(`Root Chain Code: ${rootChainCodeHex}`);
 
+        // Call getDerivedPrivateKey and showXKeys from main.wasm if available
+        let derivedKeysOutput = "";
+        let extendedKeysOutput = "";
+        
+        if (window.getDerivedPrivateKey && window.showXKeys) {
+            debugLog("Calling getDerivedPrivateKey and showXKeys from main.wasm...");
+            
+            try {
+                const derivedKeys = window.getDerivedPrivateKey(privateKeyHex, rootChainCodeHex);
+                if (derivedKeys && !derivedKeys.startsWith("Error:")) {
+                    derivedKeysOutput = "\n\n=== Derived Cryptocurrency Keys ===\n" + derivedKeys;
+                    debugLog("Successfully derived cryptocurrency keys");
+                }
+                
+                const extendedKeys = window.showXKeys(privateKeyHex, rootChainCodeHex);
+                if (extendedKeys && !extendedKeys.startsWith("Error:")) {
+                    extendedKeysOutput = "\n\n=== Extended Keys ===\n" + extendedKeys;
+                    debugLog("Successfully generated extended keys");
+                }
+            } catch (error) {
+                debugLog(`Error calling main.wasm functions: ${error.message}`);
+            }
+        } else {
+            debugLog("getDerivedPrivateKey or showXKeys not available from main.wasm");
+        }
+
         // Create results in the expected format
         const results = `
 DKLS Key Recovery Results:
@@ -446,11 +472,13 @@ DKLS Key Recovery Results:
 Private Key: ${privateKeyHex}
 Public Key: ${publicKeyHex}
 
+Root Chain Code: ${rootChainCodeHex}
+
 Share Details:
 ${fileNames.map((name, i) => `Share ${i + 1}: ${name} (ID: ${keyIds[i]})`).join('\n')}
 
 Total shares processed: ${keyshares.length}
-Recovery successful: Yes
+Recovery successful: Yes${derivedKeysOutput}${extendedKeysOutput}
         `.trim();
 
         debugLog("DKLS processing completed successfully");
