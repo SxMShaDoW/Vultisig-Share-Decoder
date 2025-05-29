@@ -3,18 +3,24 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/golang/protobuf/proto"
 	"github.com/urfave/cli/v2"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
 	"main/pkg/types"
 	"main/pkg/fileutils"
 	"main/pkg/encryption"
+	"main/pkg/keyhandlers"
 	"main/pkg/keyprocessing"
 	"main/pkg/shared"
 	"main/pkg/dkls"
@@ -257,50 +263,126 @@ func ProcessGG20Files(fileInfos []types.FileInfo, passwords []string, source typ
 func TestAddressAction(c *cli.Context) error {
 	privateKeyHex := c.String("private-key")
 
-	fmt.Printf("Testing address generation for private key: %s\n\n", privateKeyHex)
+	fmt.Printf("Testing HD derivation for root private key: %s\n\n", privateKeyHex)
 
-	// Get the address generator
-	generator := dkls.GetAddressGenerator()
-
-	// Validate the private key first
-	if !generator.ValidatePrivateKey(privateKeyHex) {
-		return fmt.Errorf("invalid private key: not a valid secp256k1 private key")
+	// Decode the hex private key
+	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		return fmt.Errorf("invalid hex private key: %w", err)
 	}
 
-	fmt.Println("✅ Private key is valid for secp256k1")
-
-	// Generate Bitcoin address
-	fmt.Println("\n=== Bitcoin ===")
-	btcAddr, wif, err := generator.GenerateBitcoinAddress(privateKeyHex)
-	if err != nil {
-		fmt.Printf("Error generating Bitcoin address: %v\n", err)
-	} else {
-		fmt.Printf("Address (P2WPKH): %s\n", btcAddr)
-		fmt.Printf("WIF Private Key: %s\n", wif)
+	if len(privateKeyBytes) != 32 {
+		return fmt.Errorf("private key must be 32 bytes, got %d bytes", len(privateKeyBytes))
 	}
 
-	// Generate Ethereum address
-	fmt.Println("\n=== Ethereum ===")
-	ethAddr, err := generator.GenerateEthereumAddress(privateKeyHex)
-	if err != nil {
-		fmt.Printf("Error generating Ethereum address: %v\n", err)
-	} else {
-		fmt.Printf("Address: %s\n", ethAddr)
+	// Create secp256k1 private key
+	privateKey := secp256k1.PrivKeyFromBytes(privateKeyBytes)
+	
+	// Create chaincode using SHA256 of the private key (similar to DKLS approach)
+	chaincode := sha256.Sum256(privateKeyBytes)
+	
+	// Create extended private key (master key)
+	net := &chaincfg.MainNetParams
+	extendedPrivateKey := hdkeychain.NewExtendedKey(
+		net.HDPrivateKeyID[:], 
+		privateKey.Serialize(), 
+		chaincode[:], 
+		[]byte{0x00, 0x00, 0x00, 0x00}, 
+		0, 
+		0, 
+		true,
+	)
+
+	fmt.Printf("✅ Created HD master key from private key\n")
+	fmt.Printf("Extended master key: %s\n\n", extendedPrivateKey.String())
+
+	// Define supported coins with their derivation paths
+	supportedCoins := []struct {
+		name       string
+		derivePath string
+		action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
+	}{
+		{
+			name:       "Bitcoin",
+			derivePath: "m/84'/0'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowBitcoinKey(key, output)
+			},
+		},
+		{
+			name:       "Bitcoin Cash",
+			derivePath: "m/44'/145'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowBitcoinCashKey(key, output)
+			},
+		},
+		{
+			name:       "Dogecoin",
+			derivePath: "m/44'/3'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowDogecoinKey(key, output)
+			},
+		},
+		{
+			name:       "Litecoin",
+			derivePath: "m/84'/2'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowLitecoinKey(key, output)
+			},
+		},
+		{
+			name:       "Ethereum",
+			derivePath: "m/44'/60'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.ShowEthereumKey(key, output)
+			},
+		},
+		{
+			name:       "THORChain",
+			derivePath: "m/44'/931'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.CosmosLikeKeyHandler(key, "thor", "thorv", "thorc", output, "THORChain")
+			},
+		},
+		{
+			name:       "MayaChain",
+			derivePath: "m/44'/931'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.CosmosLikeKeyHandler(key, "maya", "mayav", "mayac", output, "MayaChain")
+			},
+		},
+		{
+			name:       "Cosmos",
+			derivePath: "m/44'/118'/0'/0/0",
+			action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return keyhandlers.CosmosLikeKeyHandler(key, "cosmos", "cosmosvaloper", "cosmosvalcons", output, "Cosmos")
+			},
+		},
 	}
 
-	// Generate all supported addresses
-	fmt.Println("\n=== All Supported Cryptocurrencies ===")
-	addresses, err := generator.GenerateMultiCoinAddresses(privateKeyHex)
-	if err != nil {
-		fmt.Printf("Error generating multi-coin addresses: %v\n", err)
-	} else {
-		for coin, info := range addresses {
-			fmt.Printf("\n%s:\n", strings.ToUpper(coin))
-			fmt.Printf("  Address: %s\n", info.Address)
-			if info.WIF != "" {
-				fmt.Printf("  WIF: %s\n", info.WIF)
-			}
+	// Derive keys for each supported cryptocurrency
+	for _, coin := range supportedCoins {
+		fmt.Printf("=== %s (%s) ===\n", coin.name, coin.derivePath)
+		
+		// Get derived private key
+		derivedKey, err := keyhandlers.GetDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
+		if err != nil {
+			fmt.Printf("❌ Error deriving %s key: %v\n\n", coin.name, err)
+			continue
 		}
+		
+		// Create output builder for this coin
+		var outputBuilder strings.Builder
+		
+		// Call the specific coin handler
+		if err := coin.action(derivedKey, &outputBuilder); err != nil {
+			fmt.Printf("❌ Error generating %s addresses: %v\n\n", coin.name, err)
+			continue
+		}
+		
+		// Print the results
+		fmt.Print(outputBuilder.String())
+		fmt.Println()
 	}
 
 	return nil
