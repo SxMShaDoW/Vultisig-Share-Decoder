@@ -36,21 +36,17 @@ make cli && ./dist/cli recover --files "<vault_share1.dat|.bak|.vult>" --files "
 Example with included test files:
 ```bash
 make cli && ./dist/cli recover --files "honeypot.bak"
-make cli && ./dist/cli recover --files "Test-part1of2.vult,Test-part2of2.vult"
+make cli && ./dist/cli recover --files "Test-part1of2.vult" --files "Test-part2of2.vult"
 ```
 
-Force a specific scheme (auto-detection by default):
+Force a specific scheme (defaults to gg20 by default):
 ```bash
-make cli && ./dist/cli recover --files "vault1.vult,vault2.vult" --scheme gg20
+make cli && ./dist/cli recover --files "vault1.vult" --files "vault2.vult" --scheme dkls
 ```
 
 ### Test Address Generation
-Test HD derivation and address generation from a known private key:
-```bash
-make cli && ./dist/cli test-address --private-key <hex_private_key>
-```
+Test HD derivation and address generation from a known private key with custom chaincode:
 
-With custom chaincode:
 ```bash
 make cli && ./dist/cli test-address --private-key <hex_private_key> --chaincode <hex_chaincode>
 ```
@@ -142,8 +138,5 @@ GOOS=js GOARCH=wasm go build -tags wasm -o static/main.wasm
 
 # Build Web Server
 go build -tags server -o dist/webserver ./cmd/server
-
-
-98% of the code is from: [Mobile TSS Lib](https://github.com/vultisig/mobile-tss-lib/blob/main/cmd/recovery-cli/main.go)
 
 
