@@ -53,10 +53,10 @@ func ProcessDKLSKeys(threshold int, dklsShares []dkls.DKLSShareData, partyIDs []
 		fmt.Fprintf(outputBuilder, "\n")
 	}
 
-	// Try native Go DKLS reconstruction first
-	fmt.Fprintf(outputBuilder, "Attempting native Go DKLS key reconstruction...\n")
+	// Try native Go DKLS reconstruction first using WASM-pattern approach
+	fmt.Fprintf(outputBuilder, "Attempting native Go DKLS key reconstruction (WASM-pattern)...\n")
 	if err := dkls.ProcessDKLSSharesNative(dklsShares, partyIDs, threshold, outputBuilder); err != nil {
-		fmt.Fprintf(outputBuilder, "Native reconstruction failed: %v\n", err)
+		fmt.Fprintf(outputBuilder, "Native WASM-pattern reconstruction failed: %v\n", err)
 		
 		// Fallback to WASM if available
 		if dklsWrapper != nil {

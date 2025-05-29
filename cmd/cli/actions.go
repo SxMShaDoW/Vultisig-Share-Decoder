@@ -453,7 +453,30 @@ func TestAddressAction(c *cli.Context) error {
 // extractDKLSMasterKey extracts master private key and chain code from DKLS vault files
 // This function mimics the WASM extraction process for consistency
 func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (privateKeyHex, chaincodeHex string, err error) {
-	// Use the same WASM processing logic to extract master key
+	// Process each vault file following the same pattern as main.js parseAndDecryptVault
+	var allKeyshareData [][]byte
+	
+	for i, fileInfo := range fileInfos {
+		password := ""
+		if i < len(passwords) {
+			password = passwords[i]
+		}
+
+		// Extract keyshare data following the WASM pattern
+		keyshareData, _, err := parseDKLSVaultFile(fileInfo.Content, password, fileInfo.Name)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to parse vault file %s: %v", fileInfo.Name, err)
+		}
+
+		allKeyshareData = append(allKeyshareData, keyshareData)
+	}
+
+	if len(allKeyshareData) == 0 {
+		return "", "", fmt.Errorf("no valid keyshare data extracted")
+	}
+
+	// Try to use the same WASM processing to get the master key
+	// This will call the WASM library if available
 	result, err := shared.ProcessFileContent(fileInfos, passwords, types.CommandLine)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to process DKLS files: %v", err)
