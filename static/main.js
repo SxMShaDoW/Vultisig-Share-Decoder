@@ -200,7 +200,14 @@ function parseVaultFromBytes(fileData) {
         }
     }
 
-    // Fallback: try to find keyshare data using pattern matching
+    // If we didn't find keyshare data in the parsed structure, 
+    // use the large field we found (88032 bytes) as the keyshare data
+    if (!keyshareData && keyshareField && keyshareField.length > 10000) {
+        debugLog("Using large keyshares field as raw keyshare data");
+        keyshareData = keyshareField;
+    }
+
+    // Final fallback: try to find keyshare data using pattern matching
     if (!keyshareData) {
         keyshareData = findKeyshareDataFallback(vaultData);
     }
@@ -278,37 +285,40 @@ function extractKeyshareFromProtobuf(keyshareFieldData) {
             if (lengthInfo.value > 0 && offset + lengthInfo.value <= keyshareFieldData.length) {
                 const keyshareBytes = keyshareFieldData.slice(offset, offset + lengthInfo.value);
 
-                // For DKLS, the keyshare data is base64 encoded string in protobuf
+                // For DKLS, the keyshare data is hex-encoded string in protobuf
                 try {
                     const keyshareString = new TextDecoder().decode(keyshareBytes);
                     debugLog(`Keyshare string preview: ${keyshareString.substring(0, 100)}...`);
                     
-                    // Check if it looks like base64
-                    if (/^[A-Za-z0-9+/]+=*$/.test(keyshareString.trim())) {
-                        debugLog("String appears to be base64, decoding...");
-                        const decoded = Uint8Array.from(atob(keyshareString), c => c.charCodeAt(0));
-                        keyshareData = decoded;
-                        debugLog(`Decoded DKLS keyshare from base64, length: ${keyshareData.length}`);
-                        debugLog(`First 32 bytes of decoded keyshare: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
-                    } else if (/^[0-9a-fA-F]+$/.test(keyshareString.trim())) {
-                        // Check if it's hex-encoded
+                    // Check if it looks like hex-encoded
+                    if (/^[0-9a-fA-F]+$/.test(keyshareString.trim())) {
                         debugLog("String appears to be hex-encoded, decoding...");
                         const hexStr = keyshareString.trim();
                         const decoded = new Uint8Array(hexStr.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                         keyshareData = decoded;
                         debugLog(`Decoded DKLS keyshare from hex, length: ${keyshareData.length}`);
                         debugLog(`First 32 bytes of decoded keyshare: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+                        return keyshareData; // Return immediately if we found and decoded successfully
+                    } else if (/^[A-Za-z0-9+/]+=*$/.test(keyshareString.trim())) {
+                        // Check if it looks like base64
+                        debugLog("String appears to be base64, decoding...");
+                        const decoded = Uint8Array.from(atob(keyshareString), c => c.charCodeAt(0));
+                        keyshareData = decoded;
+                        debugLog(`Decoded DKLS keyshare from base64, length: ${keyshareData.length}`);
+                        debugLog(`First 32 bytes of decoded keyshare: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+                        return keyshareData; // Return immediately if we found and decoded successfully
                     } else {
                         debugLog("String doesn't look like base64 or hex, using as binary");
                         keyshareData = keyshareBytes;
+                        return keyshareData; // Return the raw bytes
                     }
                 } catch (e) {
                     debugLog(`String decode failed: ${e.message}, trying raw bytes`);
                     // If not base64, use raw bytes
                     keyshareData = keyshareBytes;
                     debugLog(`Using raw DKLS keyshare bytes, length: ${keyshareData.length}`);
+                    return keyshareData;
                 }
-                break;
             }
         } else if (wireType === 2) {
             // Skip other string fields
@@ -326,13 +336,20 @@ function extractKeyshareFromProtobuf(keyshareFieldData) {
         }
     }
 
+    // If we didn't find field 2, try to decode the entire message as hex
     if (!keyshareData) {
         debugLog("No keyshare field found, trying to decode the entire message as hex...");
         
-        // The entire message might be hex-encoded keyshare data
         try {
-            // Skip the protobuf header and decode the payload as hex
-            const hexStr = new TextDecoder().decode(keyshareFieldData.slice(2)); // Skip 0a 42
+            // Skip the protobuf header (0a 42) and decode the payload as hex
+            let hexStr;
+            if (keyshareFieldData[0] === 0x0a && keyshareFieldData[1] === 0x42) {
+                // Skip protobuf field header
+                hexStr = new TextDecoder().decode(keyshareFieldData.slice(2));
+            } else {
+                hexStr = new TextDecoder().decode(keyshareFieldData);
+            }
+            
             debugLog(`Attempting to decode as hex string: ${hexStr.substring(0, 100)}...`);
             
             if (/^[0-9a-fA-F]+$/.test(hexStr.trim())) {
@@ -340,59 +357,10 @@ function extractKeyshareFromProtobuf(keyshareFieldData) {
                 keyshareData = decoded;
                 debugLog(`Successfully decoded entire message as hex, final size: ${keyshareData.length}`);
                 debugLog(`First 32 bytes: ${Array.from(keyshareData.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+                return keyshareData;
             }
         } catch (e) {
             debugLog(`Hex decode of entire message failed: ${e.message}`);
-        }
-        
-        if (!keyshareData) {
-            debugLog("Trying alternative extraction methods...");
-            
-            // Alternative: look for the largest field that might be the keyshare
-            offset = 0;
-            let largestField = null;
-            let largestSize = 0;
-            
-            while (offset < keyshareFieldData.length - 10) {
-                const fieldHeader = keyshareFieldData[offset];
-                const wireType = fieldHeader & 0x07;
-                const fieldNumber = fieldHeader >>> 3;
-                
-                offset++;
-                
-                if (wireType === 2) {
-                    const lengthInfo = readVarint(keyshareFieldData, offset);
-                    offset += lengthInfo.bytesRead;
-                    
-                    if (lengthInfo.value > largestSize && lengthInfo.value > 1000) {
-                        largestSize = lengthInfo.value;
-                        largestField = keyshareFieldData.slice(offset, offset + lengthInfo.value);
-                        debugLog(`Found larger field candidate: field ${fieldNumber}, size ${lengthInfo.value}`);
-                    }
-                    
-                    offset += lengthInfo.value;
-                } else {
-                    offset++;
-                }
-            }
-            
-            if (largestField) {
-                debugLog(`Using largest field as keyshare candidate, size: ${largestSize}`);
-                // Try to decode as base64 string
-                try {
-                    const candidateString = new TextDecoder().decode(largestField);
-                    if (/^[A-Za-z0-9+/]+=*$/.test(candidateString.trim())) {
-                        keyshareData = Uint8Array.from(atob(candidateString), c => c.charCodeAt(0));
-                        debugLog(`Successfully decoded largest field as base64, final size: ${keyshareData.length}`);
-                    } else {
-                        keyshareData = largestField;
-                        debugLog(`Using largest field as raw bytes, size: ${keyshareData.length}`);
-                    }
-                } catch (e) {
-                    keyshareData = largestField;
-                    debugLog(`Using largest field as raw bytes after decode failure, size: ${keyshareData.length}`);
-                }
-            }
         }
     }
 
