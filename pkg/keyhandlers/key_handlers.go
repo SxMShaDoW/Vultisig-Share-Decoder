@@ -1,27 +1,27 @@
 package keyhandlers
 
 import (
-  "encoding/hex"
-  "fmt"
-  "strings"
+	"encoding/hex"
+	"fmt"
+	"strings"
 
-  "github.com/btcsuite/btcd/btcutil"
-  "github.com/btcsuite/btcd/chaincfg"
-  "github.com/btcsuite/btcd/btcutil/hdkeychain"
-  coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-  "github.com/cosmos/cosmos-sdk/types"
-  sdk "github.com/cosmos/cosmos-sdk/types"
-  "github.com/ethereum/go-ethereum/crypto"
-  "github.com/gcash/bchd/bchec"
-  bchChainCfg "github.com/gcash/bchd/chaincfg"
-  "github.com/gcash/bchutil"
-  dogec "github.com/eager7/dogd/btcec"
-  dogechaincfg "github.com/eager7/dogd/chaincfg"
-  "github.com/eager7/dogutil"
-  "github.com/ltcsuite/ltcd/ltcutil"
-  ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
-  //"github.com/vultisig/mobile-tss-lib/tss"
-  "main/tss"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gcash/bchd/bchec"
+	bchChainCfg "github.com/gcash/bchd/chaincfg"
+	"github.com/gcash/bchutil"
+	dogec "github.com/eager7/dogd/btcec"
+	dogechaincfg "github.com/eager7/dogd/chaincfg"
+	"github.com/eager7/dogutil"
+	"github.com/ltcsuite/ltcd/ltcutil"
+	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
+	"main/tss"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -242,3 +242,49 @@ func ShowMayachainKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder 
   fmt.Fprintf(outputBuilder, "\naddress:%s\n", addr.String())
   return nil
 }
+
+// ProcessRootKeyForCoins processes root key material through the coin handlers
+func ProcessRootKeyForCoins(rootPrivateKeyBytes []byte, rootChainCodeBytes []byte, coinConfigs []CoinConfig, outputBuilder *strings.Builder) error {
+	// Create secp256k1 private key from bytes
+	privateKey := secp256k1.PrivKeyFromBytes(rootPrivateKeyBytes)
+	publicKey := privateKey.PubKey()
+
+	// Display root key information
+	hexPubKey := hex.EncodeToString(publicKey.SerializeCompressed())
+	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(ECDSA): %s\n", hexPubKey)
+	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey(ECDSA): %s\n", hex.EncodeToString(privateKey.Serialize()))
+
+	// Create extended key for derivation
+	net := &chaincfg.MainNetParams
+	fmt.Fprintf(outputBuilder, "\nchaincode: %s\n", hex.EncodeToString(rootChainCodeBytes))
+
+	extendedPrivateKey := hdkeychain.NewExtendedKey(
+		net.HDPrivateKeyID[:], 
+		privateKey.Serialize(), 
+		rootChainCodeBytes, 
+		[]byte{0x00, 0x00, 0x00, 0x00}, 
+		0, 
+		0, 
+		true,
+	)
+	fmt.Fprintf(outputBuilder, "\nextended private key full: %s\n", extendedPrivateKey.String())
+
+	// Process each coin configuration
+	for _, coin := range coinConfigs {
+		fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.Name)
+
+		key, err := GetDerivedPrivateKeys(coin.DerivePath, extendedPrivateKey)
+		if err != nil {
+			return fmt.Errorf("error deriving private key for %s: %w", coin.Name, err)
+		}
+
+		fmt.Fprintf(outputBuilder, "\nprivate key for %s: %s \n", coin.Name, key.String())
+
+		if err := coin.Action(key, outputBuilder); err != nil {
+			fmt.Printf("error showing keys for %s: %v\n", coin.Name, err)
+		}
+	}
+
+	return nil
+}
+

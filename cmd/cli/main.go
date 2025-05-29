@@ -28,8 +28,30 @@ func main() {
                         Required:   true,
                         HasBeenSet: false,
                     },
+                    &cli.StringFlag{
+                        Name:  "scheme",
+                        Usage: "force scheme type (gg20, dkls, auto)",
+                        Value: "auto",
+                    },
                 },
                 Action: RecoverAction,
+            },
+            {
+                Name: "test-address",
+                Flags: []cli.Flag{
+                    &cli.StringFlag{
+                        Name:     "private-key",
+                        Usage:    "private key in hex format",
+                        Required: true,
+                    },
+                    &cli.StringFlag{
+                        Name:     "chaincode",
+                        Usage:    "chaincode in hex format",
+                        Required: true,
+                    },
+                },
+                Action: TestAddressAction,
+                Usage:  "test address generation from private key",
             },
         },
     }

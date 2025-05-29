@@ -1,9 +1,13 @@
 # Vultisig Share Decoder
 
+This is a simple "recovery" tool to see the public information on your vault share and recover private keys from vault shares. This tool supports both **GG20** and **DKLS** cryptographic schemes.
 
-This is a simple "recovery" tool to see the public information on your vault share.
-This is useful when you want to remember what share it is (if you changed the name).
+This is useful when you want to remember what share it is (if you changed the name) or recover your private keys for importing into other wallets.
 You can (and should) run this locally.
+
+## Supported Schemes
+- **GG20**: Full support via CLI and web interface
+- **DKLS**: Currently supported only via the web interface (CLI support coming soon)
 
 ## Demo
 [Demo](https://vultisig-share-decoder.replit.app/?)
@@ -19,15 +23,46 @@ You can (and should) run this locally.
 
 Note: You should not trust this binary and create your own with `make all` or `make cli`
 
-## Running the CLI locally
-`make cli && ./dist/cli recover --files "<a vault share.dat|.bak|.vult>"`
-`make cli && ./dist/cli recover --files "honeypot.bak"` 
+## CLI Commands
 
-I included included [JPThor's unencrypted honeypot](https://github.com/jpthor/blockchain/blob/master/vultisig-JP%20Honeypot%20Vault-2024-09-2of3-e8e5-iPad-D3842FFB838E.bak) to test against.
+### Recover Keys from Vault Shares
+**Note: DKLS recovery is currently only supported via the web interface**
 
-I also included a `Test-part1of2.vult` and `Test-part2of2.vult` 
+Recover private keys from GG20 vault shares:
+```bash
+make cli && ./dist/cli recover --files "<vault_share1.dat|.bak|.vult>" --files "<vault_share2.dat|.bak|.vult>"
+```
 
-`make cli && ./dist/cli recover --files "Test-part1of2.vult, Test-part2of2.vult"`
+Example with included test files:
+```bash
+make cli && ./dist/cli recover --files "honeypot.bak"
+make cli && ./dist/cli recover --files "Test-part1of2.vult" --files "Test-part2of2.vult"
+```
+
+Force a specific scheme (defaults to gg20 by default):
+```bash
+make cli && ./dist/cli recover --files "vault1.vult" --files "vault2.vult" --scheme dkls
+```
+
+### Test Address Generation
+Test HD derivation and address generation from a known private key with custom chaincode:
+
+```bash
+make cli && ./dist/cli test-address --private-key <hex_private_key> --chaincode <hex_chaincode>
+```
+
+Example:
+```bash
+make cli && ./dist/cli test-address --private-key 2abbfad6ea48607d9665e123456789bed21204cfe479fdec40d33058c0a4e3fe --chaincode e2f8c4826d6d23407cff45498b940f52756c3056fa1bcba0cb7f6bafc2478eac
+```
+
+## Test Files Included
+
+I included [JPThor's unencrypted honeypot](https://github.com/jpthor/blockchain/blob/master/vultisig-JP%20Honeypot%20Vault-2024-09-2of3-e8e5-iPad-D3842FFB838E.bak) to test against.
+
+I also included:
+- `Test-part1of2.vult` and `Test-part2of2.vult` (GG20 shares)
+- `TestDKLS1of2.vult` and `TestDKLS2of2.vult` (DKLS shares - use web interface)
 
 For `ETH` it will return something like this:
 ```
@@ -103,8 +138,5 @@ GOOS=js GOARCH=wasm go build -tags wasm -o static/main.wasm
 
 # Build Web Server
 go build -tags server -o dist/webserver ./cmd/server
-
-
-98% of the code is from: [Mobile TSS Lib](https://github.com/vultisig/mobile-tss-lib/blob/main/cmd/recovery-cli/main.go)
 
 

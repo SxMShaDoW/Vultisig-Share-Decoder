@@ -2,7 +2,7 @@ entrypoint = "main.go"
 # run = "make cli && ./cli/cli-recover recover --files honeypot.bak"
 # run = "make cli && ./cli/cli-recover recover --files Test-part1of2.vult --files Test-part2of2.vult"
 run = "make all && ./dist/webserver"
-modules = ["go-1.21"]
+modules = ["go-1.21", "nodejs-20"]
 
 
 [env]
@@ -10,6 +10,7 @@ GOPATH = "$REPL_HOME/gopath"
 
 [nix]
 channel = "stable-24_05"
+packages = ["hexdump", "file"]
 
 [gitHubImport]
 requiredFiles = [".replit"]
@@ -26,3 +27,19 @@ defaultBucketID = "replit-objstore-149b9641-398f-4de6-9ec3-82b50061bd0c"
 [[ports]]
 localPort = 8080
 externalPort = 80
+
+[workflows]
+runButton = "Build and Run Server"
+
+[[workflows.workflow]]
+name = "Build and Run Server"
+author = 34845985
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "make all"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "./dist/webserver"
