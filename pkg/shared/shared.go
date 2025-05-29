@@ -1,4 +1,3 @@
-// Fix DKLS vault parsing to handle raw keyshare data
 package shared
 
 import (
@@ -70,7 +69,7 @@ func DetectSchemeType(content []byte) types.SchemeType {
 	return types.GG20
 }
 
-// ProcessDKLSFiles processes DKLS files and returns the result.
+// ProcessDKLSFiles processes DKLS format files
 func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder, threshold int) error {
 	log.Printf("ProcessDKLSFiles: Processing %d DKLS files with threshold %d", len(fileInfos), threshold)
 
@@ -80,28 +79,14 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 	for i, fileInfo := range fileInfos {
 		log.Printf("Processing DKLS file %d: %s", i, fileInfo.Name)
 
-		// Try to parse as vault first, if that fails, treat as raw keyshare data
+		// Parse the vault from the file content
 		vault, _, err := ParseDKLSVault(fileInfo.Content)
 		if err != nil {
-			log.Printf("Failed to parse as vault, treating as raw keyshare data: %v", err)
-
-			// Create a share data entry with raw content
-			shareData := dkls.DKLSShareData{
-				ID:        fmt.Sprintf("share_%d", i),
-				PartyID:   fmt.Sprintf("party_%d", i),
-				ShareData: fileInfo.Content,
-			}
-
-			dklsShares = append(dklsShares, shareData)
-			partyIDs = append(partyIDs, shareData.PartyID)
-
-			log.Printf("Created raw DKLS share: ID=%s, PartyID=%s, DataLength=%d",
-				shareData.ID, shareData.PartyID, len(shareData.ShareData))
-			continue
+			return fmt.Errorf("failed to parse DKLS vault from file %s: %w", fileInfo.Name, err)
 		}
 
 		// Log vault information for debugging
-		log.Printf("Vault: Name='%s', LocalPartyId='%s', ResharePrefix='%s'",
+		log.Printf("Vault: Name='%s', LocalPartyId='%s', ResharePrefix='%s'", 
 			vault.Name, vault.LocalPartyId, vault.ResharePrefix)
 		log.Printf("Vault has %d keyshares", len(vault.KeyShares))
 		log.Printf("PublicKeyEcdsa: %s", vault.PublicKeyEcdsa)
@@ -123,7 +108,7 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 
 			// If there are multiple keyshares, log them all
 			for j, ks := range vault.KeyShares {
-				log.Printf("Keyshare %d: PublicKey=%s, Length=%d bytes",
+				log.Printf("Keyshare %d: PublicKey=%s, Length=%d bytes", 
 					j, ks.PublicKey, len(ks.Keyshare))
 			}
 		} else {
@@ -406,4 +391,3 @@ func ProcessDKLSFilesAndGetResult(fileInfos []types.FileInfo, outputBuilder *str
 	}
 	return outputBuilder.String(), nil
 }
-`

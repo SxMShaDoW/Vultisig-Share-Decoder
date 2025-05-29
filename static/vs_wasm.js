@@ -761,9 +761,9 @@ export class KeygenSession {
      * # Arguments
      *
      * * `setup`     - A setup message created by `KeygenSession.setup`
-
+     *
      * * `id`        - A human readable party identifier
-
+     *
      * * `old_Share` - Old key share
      * @param {Uint8Array} setup
      * @param {string} id
@@ -796,13 +796,13 @@ export class KeygenSession {
      * # Arguments
      *
      * * `setup`     - A setup message created by `KeygenSession.setup`
-
+     *
      * * `id`        - A human readable party identifier
-
+     *
      * * `s_i_0` - The additive share of the party such that Σ(s_i_0) = private key , 0<=i<=n
-
+     *
      * * `publickey` - The generic common public key
-
+     *
      * * `rootChainCode` - The root chain code
      * @param {Uint8Array} setup
      * @param {string} id
@@ -843,9 +843,9 @@ export class KeygenSession {
      *
      * * `key_id`    - Optional array of 32 bytes to identify an existing
      *                 key share for key refresh.
-
+     *
      * * `threshold` - Threshold parameter.
-
+     *
      * * `ids`       - Array of party identities.
      * @param {Uint8Array | null | undefined} key_id
      * @param {number} threshold
@@ -1170,9 +1170,9 @@ export class QcSession {
      * # Arguments
      *
      * * `setup` - A setup message created by `QcSession.setup`
-
+     *
      * * `id`    - A human readable party identifier
-
+     *
      * * `keyshare` - Optional keyshare, passed to "old" parties
      * @param {Uint8Array} setup
      * @param {string} id
@@ -1210,13 +1210,13 @@ export class QcSession {
      * # Arguments
      *
      * * `keyshare`  - keyshare.
-
+     *
      * * `ids`       - Array of party identities.
-
+     *
      * * `olds`      - Array of indices of old parties.
-
+     *
      * * `threshold` - New threshold parameter.
-
+     *
      * * `news`      - Array of indices of new parties.
      * @param {Keyshare} keyshare
      * @param {string[]} ids
@@ -1340,9 +1340,9 @@ export class SignSession {
      * # Arguments
      *
      * * `setup` - Setup message created by `SignSession.setup()`
-
+     *
      * * `id`    - Party identifier
-
+     *
      * * `share` - Key share object
      * @param {Uint8Array} setup
      * @param {string} id
@@ -1375,13 +1375,13 @@ export class SignSession {
      * # Arguments
      *
      * * `key_id`       - 32 bytes array identifing a distributed key
-
+     *
      * * `chain_path`   - Key derivation path
-
+     *
      * * `message_hash` - optional 32 bytes of hash of a message to sign.
      *                    If not passed then generate setup message for
      *                    a pre-sign session.
-
+     *
      * * `ids`          - Array of party identifiers
      * @param {Uint8Array} key_id
      * @param {string} chain_path
@@ -1717,7 +1717,7 @@ function initSync(module) {
     return __wbg_finalize_init(instance, module);
 }
 
-function init(module_or_path) {
+async function __wbg_init(module_or_path) {
     if (wasm !== undefined) return wasm;
 
 
@@ -1745,13 +1745,5 @@ function init(module_or_path) {
     return __wbg_finalize_init(instance, module);
 }
 
-// Support both ES modules and CommonJS
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = init;
-    module.exports.default = init;
-    module.exports.Keyshare = Keyshare;
-    module.exports.KeyExportSession = KeyExportSession;
-} else {
-    // ES module exports
-    export { Keyshare, KeyExportSession, init };
-}
+export { initSync };
+export default __wbg_init;

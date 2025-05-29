@@ -126,13 +126,13 @@ const path = require('path');
 // Load the WASM module
 async function runDKLS() {
     try {
-        // Import the WASM wrapper using CommonJS
-        const wasmModule = require(path.resolve('%s'));
-        const init = wasmModule.default || wasmModule;
+        // Import the WASM wrapper - using dynamic import for ES modules
+        const wasmModule = await import('file://' + path.resolve('%s'));
+        const init = wasmModule.default;
         const { KeyExportSession, Keyshare } = wasmModule;
 
         // Initialize WASM with the binary file
-        await init(fs.readFileSync(path.resolve('%s')));
+        await init('file://' + path.resolve('%s'));
 
         const request = %s;
         console.error('Processing', request.shares.length, 'shares with threshold', request.threshold);
