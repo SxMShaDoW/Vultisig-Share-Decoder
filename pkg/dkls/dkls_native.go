@@ -170,7 +170,7 @@ func (p *NativeDKLSProcessor) parseAndDecryptVault(fileData []byte, password, fi
 		return nil, VaultInfo{}, fmt.Errorf("could not parse vault protobuf: %v", err)
 	}
 
-	log.Printf("Parsed vault: %s, keyshares: %d, libType: %d", vault.Name, len(vault.KeyShares), vault.LibType)
+	log.Printf("Parsed vault: %s, keyshares: %d", vault.Name, len(vault.KeyShares))
 
 	// Step 5: Extract keyshare data for DKLS (same as main.js)
 	if len(vault.KeyShares) == 0 {
@@ -1269,28 +1269,7 @@ func (p *NativeDKLSProcessor) scorePrivateKeyCandidate(data []byte) int {
 	return score
 }
 
-func (p *NativeDKLSProcessor) calculateEntropy(data []byte) float64 {
-	if len(data) == 0 {
-		return 0
-	}
 
-	freq := make(map[byte]int)
-	for _, b := range data {
-		freq[b]++
-	}
-
-	entropy := 0.0
-	length := float64(len(data))
-
-	for _, count := range freq {
-		if count > 0 {
-			p := float64(count) / length
-			entropy -= p * math.Log2(p)
-		}
-	}
-
-	return entropy
-}
 
 // EntropyBlock represents a block of data with its entropy score
 type EntropyBlock struct {
@@ -1522,15 +1501,15 @@ func (p *NativeDKLSProcessor) findEnhancedDKLSPatterns(data []byte) {
 		}
 	}
 
-	for i := 0; i < len(data)-8; i++ {
-		if i+4 < len(data) {
-			length := uint32(data[i]) | uint32(data[i+1])<<8 | 
-					  uint32(data[i+2])<<16 | uint32(data[i+3])<<24
+	for offset := 0; offset < len(data)-8; offset++ {
+		if offset+4 < len(data) {
+			length := uint32(data[offset]) | uint32(data[offset+1])<<8 | 
+					  uint32(data[offset+2])<<16 | uint32(data[offset+3])<<24
 
-			if length > 16 && length < 1024 && i+4+int(length) <= len(data) {
-				log.Printf("Potential length-prefixed data at offset %d: length=%d", i, length)
+			if length > 16 && length < 1024 && offset+4+int(length) <= len(data) {
+				log.Printf("Potential length-prefixed data at offset %d: length=%d", offset, length)
 
-				dataStart := i + 4
+				dataStart := offset + 4
 				if int(length) >= 32 {
 					keyCandidate := data[dataStart : dataStart+32]
 					if p.scorePrivateKeyCandidate(keyCandidate) > 50 {
