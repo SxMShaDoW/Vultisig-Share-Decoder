@@ -2,6 +2,7 @@
 package dkls
 
 import (
+	"encoding/hex"
 	"strings"
 )
 
