@@ -449,6 +449,8 @@ function parseProtobufVault(bytes) {
         resharePrefix: ''
     };
 
+    debugLog(`Parsing vault protobuf, total bytes: ${bytes.length}`);
+
     while (offset < bytes.length - 1) {
         if (offset >= bytes.length) break;
         
@@ -456,6 +458,7 @@ function parseProtobufVault(bytes) {
         const wireType = fieldHeader & 0x07;
         const fieldNumber = fieldHeader >>> 3;
 
+        debugLog(`Field ${fieldNumber}, wire type ${wireType} at offset ${offset}`);
         offset++;
 
         if (fieldNumber === 1 && wireType === 2) { // name (string)
@@ -465,6 +468,7 @@ function parseProtobufVault(bytes) {
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const nameBytes = bytes.slice(offset, offset + length.value);
                 vault.name = new TextDecoder().decode(nameBytes);
+                debugLog(`Found vault name: ${vault.name}`);
                 offset += length.value;
             }
         } else if (fieldNumber === 8 && wireType === 2) { // local_party_id (string)
@@ -474,6 +478,7 @@ function parseProtobufVault(bytes) {
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const partyIdBytes = bytes.slice(offset, offset + length.value);
                 vault.localPartyId = new TextDecoder().decode(partyIdBytes);
+                debugLog(`Found local party ID: ${vault.localPartyId}`);
                 offset += length.value;
             }
         } else if (fieldNumber === 2 && wireType === 2) { // public_key_ecdsa (string)
@@ -483,6 +488,7 @@ function parseProtobufVault(bytes) {
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const publicKeyEcdsaBytes = bytes.slice(offset, offset + length.value);
                 vault.publicKeyEcdsa = new TextDecoder().decode(publicKeyEcdsaBytes);
+                debugLog(`Found ECDSA public key: ${vault.publicKeyEcdsa}`);
                 offset += length.value;
             }
         } else if (fieldNumber === 3 && wireType === 2) { // public_key_eddsa (string)
@@ -492,23 +498,41 @@ function parseProtobufVault(bytes) {
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const publicKeyEddsaBytes = bytes.slice(offset, offset + length.value);
                 vault.publicKeyEddsa = new TextDecoder().decode(publicKeyEddsaBytes);
+                debugLog(`Found EdDSA public key: ${vault.publicKeyEddsa}`);
                 offset += length.value;
             }
         } else if (fieldNumber === 7 && wireType === 2) { // keyshares (repeated)
             const length = readVarint(bytes, offset);
             offset += length.bytesRead;
 
+            debugLog(`Found keyshares field, length: ${length.value}`);
+
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const keyshareBytes = bytes.slice(offset, offset + length.value);
+                debugLog(`Keyshare bytes preview: ${Array.from(keyshareBytes.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+                
                 const keyshare = parseProtobufKeyshare(keyshareBytes);
                 if (keyshare) {
                     vault.keyshares.push(keyshare);
+                    debugLog(`Successfully parsed keyshare: ${keyshare.keyshare.length} bytes`);
+                } else {
+                    debugLog("Failed to parse keyshare, trying alternative parsing...");
+                    // Try to extract keyshare data directly
+                    const altKeyshare = extractKeyshareFromProtobuf(keyshareBytes);
+                    if (altKeyshare && altKeyshare.length > 0) {
+                        vault.keyshares.push({
+                            publicKey: vault.publicKeyEcdsa || '',
+                            keyshare: new TextDecoder().decode(altKeyshare)
+                        });
+                        debugLog(`Alternative keyshare extraction successful: ${altKeyshare.length} bytes`);
+                    }
                 }
                 offset += length.value;
             }
         } else if (fieldNumber === 10 && wireType === 0) { // lib_type (enum)
             const libType = readVarint(bytes, offset);
             vault.libType = libType.value;
+            debugLog(`Found lib type: ${vault.libType}`);
             offset += libType.bytesRead;
         } else if (fieldNumber === 9 && wireType === 2) { // reshare_prefix (string)
             const length = readVarint(bytes, offset);
@@ -517,19 +541,41 @@ function parseProtobufVault(bytes) {
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const resharePrefixBytes = bytes.slice(offset, offset + length.value);
                 vault.resharePrefix = new TextDecoder().decode(resharePrefixBytes);
+                debugLog(`Found reshare prefix: ${vault.resharePrefix}`);
                 offset += length.value;
             }
         } else if (wireType === 2) {
+            // Skip unknown string/bytes fields but log them
             const length = readVarint(bytes, offset);
-            offset += length.bytesRead + length.value;
+            offset += length.bytesRead;
+            debugLog(`Skipping unknown field ${fieldNumber}, length: ${length.value}`);
+            
+            // If this is a large field that might contain keyshare data, investigate
+            if (length.value > 1000 && fieldNumber !== 7) {
+                debugLog(`Large unknown field ${fieldNumber} might contain keyshare data`);
+                const fieldData = bytes.slice(offset, offset + length.value);
+                const altKeyshare = extractKeyshareFromProtobuf(fieldData);
+                if (altKeyshare && altKeyshare.length > 0) {
+                    vault.keyshares.push({
+                        publicKey: vault.publicKeyEcdsa || '',
+                        keyshare: new TextDecoder().decode(altKeyshare)
+                    });
+                    debugLog(`Found keyshare in unknown field ${fieldNumber}: ${altKeyshare.length} bytes`);
+                }
+            }
+            
+            offset += length.value;
         } else if (wireType === 0) {
             const varint = readVarint(bytes, offset);
+            debugLog(`Skipping varint field ${fieldNumber}, value: ${varint.value}`);
             offset += varint.bytesRead;
         } else {
+            debugLog(`Skipping unknown wire type ${wireType} for field ${fieldNumber}`);
             offset++;
         }
     }
 
+    debugLog(`Vault parsing complete. Found ${vault.keyshares.length} keyshares`);
     return vault;
 }
 
@@ -540,6 +586,8 @@ function parseProtobufKeyshare(bytes) {
         keyshare: ''
     };
 
+    debugLog(`Parsing keyshare protobuf, ${bytes.length} bytes`);
+
     while (offset < bytes.length - 1) {
         if (offset >= bytes.length) break;
         
@@ -547,6 +595,7 @@ function parseProtobufKeyshare(bytes) {
         const wireType = fieldHeader & 0x07;
         const fieldNumber = fieldHeader >>> 3;
 
+        debugLog(`Keyshare field ${fieldNumber}, wire type ${wireType} at offset ${offset}`);
         offset++;
 
         if (fieldNumber === 1 && wireType === 2) { // public_key (string)
@@ -556,28 +605,65 @@ function parseProtobufKeyshare(bytes) {
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const publicKeyBytes = bytes.slice(offset, offset + length.value);
                 keyshare.publicKey = new TextDecoder().decode(publicKeyBytes);
+                debugLog(`Found keyshare public key: ${keyshare.publicKey}`);
                 offset += length.value;
             }
         } else if (fieldNumber === 2 && wireType === 2) { // keyshare (string)
             const length = readVarint(bytes, offset);
             offset += length.bytesRead;
 
+            debugLog(`Found keyshare data field, length: ${length.value}`);
+
             if (length.value > 0 && offset + length.value <= bytes.length) {
                 const keyshareBytes = bytes.slice(offset, offset + length.value);
-                keyshare.keyshare = new TextDecoder().decode(keyshareBytes);
+                
+                try {
+                    keyshare.keyshare = new TextDecoder().decode(keyshareBytes);
+                    debugLog(`Successfully decoded keyshare as string: ${keyshare.keyshare.length} chars`);
+                } catch (e) {
+                    // If it's not valid UTF-8, store as hex string
+                    keyshare.keyshare = Array.from(keyshareBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                    debugLog(`Stored keyshare as hex string: ${keyshare.keyshare.length} chars`);
+                }
                 offset += length.value;
             }
         } else if (wireType === 2) {
+            // Skip unknown string fields but log them
             const length = readVarint(bytes, offset);
+            debugLog(`Skipping unknown keyshare field ${fieldNumber}, length: ${length.value}`);
+            
+            // If this is a large field, it might be the actual keyshare data
+            if (length.value > 1000) {
+                debugLog(`Large unknown field ${fieldNumber} might be keyshare data`);
+                const fieldData = bytes.slice(offset, offset + length.value);
+                try {
+                    const stringData = new TextDecoder().decode(fieldData);
+                    if (!keyshare.keyshare && stringData.length > 100) {
+                        keyshare.keyshare = stringData;
+                        debugLog(`Used unknown field ${fieldNumber} as keyshare data`);
+                    }
+                } catch (e) {
+                    // If not valid UTF-8, try as hex
+                    const hexData = Array.from(fieldData).map(b => b.toString(16).padStart(2, '0')).join('');
+                    if (!keyshare.keyshare && hexData.length > 100) {
+                        keyshare.keyshare = hexData;
+                        debugLog(`Used unknown field ${fieldNumber} as hex keyshare data`);
+                    }
+                }
+            }
+            
             offset += length.bytesRead + length.value;
         } else if (wireType === 0) {
             const varint = readVarint(bytes, offset);
+            debugLog(`Skipping keyshare varint field ${fieldNumber}, value: ${varint.value}`);
             offset += varint.bytesRead;
         } else {
+            debugLog(`Skipping unknown keyshare wire type ${wireType} for field ${fieldNumber}`);
             offset++;
         }
     }
 
+    debugLog(`Keyshare parsing result: publicKey=${keyshare.publicKey}, keyshare length=${keyshare.keyshare.length}`);
     return keyshare.keyshare ? keyshare : null;
 }
 
