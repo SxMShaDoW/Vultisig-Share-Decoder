@@ -1,0 +1,39 @@
+2025-05-29T12:22:31.869Z: Processing file 1: Test Fast Vault DKLS-8d9b-share2of2.vult
+2025-05-29T12:22:31.870Z: Starting vault container parsing and decryption...
+2025-05-29T12:22:31.873Z: Successfully decoded base64 vault container data
+2025-05-29T12:22:31.873Z: Parsed VaultContainer - version: 1, encrypted: false
+2025-05-29T12:22:31.874Z: Using unencrypted vault data, 88586 bytes
+2025-05-29T12:22:31.874Z: Parsed vault: Test Fast Vault DKLS, keyshares: 2, libType: 1
+2025-05-29T12:22:31.874Z: Found keyshare string: 87960 characters
+2025-05-29T12:22:31.874Z: Keyshare preview: AAAAAQAAAAACAgH0tcMxzk20+PnjVvqHUAC0gbh/Zfzm/Z2OCcUVv199yeL4xIJtbSNAfP9FSYuUD1J1bDBW+hvLoMt/a6/CR46s...
+2025-05-29T12:22:31.875Z: Decoded keyshare from base64, length: 65968
+2025-05-29T12:22:31.875Z: Successfully extracted keyshare data, length: 65968 bytes
+2025-05-29T12:22:31.875Z: First 32 bytes: 00 00 00 01 00 00 00 00 02 02 01 f4 b5 c3 31 ce 4d b4 f8 f9 e3 56 fa 87 50 00 b4 81 b8 7f 65 fc
+2025-05-29T12:22:31.876Z: Extracted keyshare data for file 1, length: 65968 bytes
+2025-05-29T12:22:31.876Z: Creating WASM Keyshare object for file 1...
+2025-05-29T12:22:31.877Z: Successfully created keyshare 1
+2025-05-29T12:22:31.877Z: Created keyshare 1 with ID: 629d175c3dfba07bd98b1e1b80eb7363502258d380dcfb6d624b11cd957c2ee2
+2025-05-29T12:22:31.877Z: Processing file 2: Test Fast Vault DKLS-8d9b-share1of2-nopass.vult
+2025-05-29T12:22:31.877Z: Starting vault container parsing and decryption...
+2025-05-29T12:22:31.878Z: Successfully decoded base64 vault container data
+2025-05-29T12:22:31.878Z: Parsed VaultContainer - version: 1, encrypted: false
+2025-05-29T12:22:31.878Z: Using unencrypted vault data, 88575 bytes
+2025-05-29T12:22:31.878Z: Parsed vault: Test Fast Vault DKLS, keyshares: 2, libType: 1
+2025-05-29T12:22:31.878Z: Found keyshare string: 87960 characters
+2025-05-29T12:22:31.878Z: Keyshare preview: AAAAAQAAAAACAgD0tcMxzk20+PnjVvqHUAC0gbh/Zfzm/Z2OCcUVv199yeL4xIJtbSNAfP9FSYuUD1J1bDBW+hvLoMt/a6/CR46s...
+2025-05-29T12:22:31.879Z: Decoded keyshare from base64, length: 65968
+2025-05-29T12:22:31.879Z: Successfully extracted keyshare data, length: 65968 bytes
+2025-05-29T12:22:31.879Z: First 32 bytes: 00 00 00 01 00 00 00 00 02 02 00 f4 b5 c3 31 ce 4d b4 f8 f9 e3 56 fa 87 50 00 b4 81 b8 7f 65 fc
+2025-05-29T12:22:31.880Z: Extracted keyshare data for file 2, length: 65968 bytes
+2025-05-29T12:22:31.880Z: Creating WASM Keyshare object for file 2...
+2025-05-29T12:22:31.880Z: Successfully created keyshare 2
+2025-05-29T12:22:31.880Z: Created keyshare 2 with ID: 629d175c3dfba07bd98b1e1b80eb7363502258d380dcfb6d624b11cd957c2ee2
+2025-05-29T12:22:31.880Z: Successfully created 2 keyshares
+2025-05-29T12:22:31.880Z: Creating KeyExportSession...
+2025-05-29T12:22:31.885Z: Getting setup message...
+2025-05-29T12:22:31.885Z: Setup message length: 426
+2025-05-29T12:22:31.885Z: Exporting shares...
+2025-05-29T12:22:31.885Z: Exporting share 2...
+2025-05-29T12:22:31.888Z: DKLS processing error: unreachable
+2025-05-29T12:22:31.888Z: Error in results: Error: DKLS processing failed: unreachable
+2025-05-29T12:22:31.888Z: Error in recoverKeys: DKLS processing failed: unreachable
