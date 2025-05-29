@@ -23,6 +23,7 @@ import (
 	"main/pkg/keyhandlers"
 	"main/pkg/keyprocessing"
 	"main/pkg/shared"
+	"main/pkg/dkls"
 )
 
 func ProcessFiles(files []string, passwords []string, source types.InputSource) (string, error) {
@@ -282,7 +283,7 @@ func TestAddressAction(c *cli.Context) error {
 
 	// Create secp256k1 private key
 	privateKey := secp256k1.PrivKeyFromBytes(privateKeyBytes)
-	
+
 	// Decode the chaincode
 	var chaincode [32]byte
 	chaincodeBytes, err := hex.DecodeString(chaincodeHex)
@@ -293,7 +294,7 @@ func TestAddressAction(c *cli.Context) error {
 		return fmt.Errorf("chaincode must be 32 bytes, got %d bytes", len(chaincodeBytes))
 	}
 	copy(chaincode[:], chaincodeBytes)
-	
+
 	// Create extended private key (master key)
 	net := &chaincfg.MainNetParams
 	extendedPrivateKey := hdkeychain.NewExtendedKey(
@@ -376,27 +377,177 @@ func TestAddressAction(c *cli.Context) error {
 	// Derive keys for each supported cryptocurrency
 	for _, coin := range supportedCoins {
 		fmt.Printf("=== %s (%s) ===\n", coin.name, coin.derivePath)
-		
+
 		// Get derived private key
 		derivedKey, err := keyhandlers.GetDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
 		if err != nil {
 			fmt.Printf("❌ Error deriving %s key: %v\n\n", coin.name, err)
 			continue
 		}
-		
+
 		// Create output builder for this coin
 		var outputBuilder strings.Builder
-		
+
 		// Call the specific coin handler
 		if err := coin.action(derivedKey, &outputBuilder); err != nil {
 			fmt.Printf("❌ Error generating %s addresses: %v\n\n", coin.name, err)
 			continue
 		}
-		
+
 		// Print the results
 		fmt.Print(outputBuilder.String())
 		fmt.Println()
 	}
 
 	return nil
+}
+
+// extractDKLSMasterKey extracts master private key and chain code from DKLS vault files
+func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (string, string, error) {
+	if len(fileInfos) == 0 {
+		return "", "", fmt.Errorf("no files provided")
+	}
+
+	// For CLI, we'll use the native DKLS processor to extract key material
+	processor := dkls.NewNativeDKLSProcessor()
+
+	// Convert FileInfos to DKLSShareData
+	var dklsShares []dkls.DKLSShareData
+	var partyIDs []string
+
+	for i, fileInfo := range fileInfos {
+		password := ""
+		if i < len(passwords) {
+			password = passwords[i]
+		}
+
+		// Parse the vault file to extract DKLS keyshare
+		shareData, partyID, err := parseDKLSVaultFile(fileInfo.Content, password, fileInfo.Name)
+		if err != nil {
+			return "", "", fmt.Errorf("error parsing file %s: %w", fileInfo.Name, err)
+		}
+
+		dklsShares = append(dklsShares, dkls.DKLSShareData{
+			ID:        fmt.Sprintf("share_%d", i+1),
+			ShareData: shareData,
+			PartyID:   partyID,
+		})
+		partyIDs = append(partyIDs, partyID)
+	}
+
+	if len(dklsShares) == 0 {
+		return "", "", fmt.Errorf("no valid DKLS shares found")
+	}
+
+	// Use the processor to reconstruct the key
+	localState := &types.DKLSLocalState{
+		Share: types.DKLSShare{
+			ShareData: dklsShares[0].ShareData,
+			PartyID:   dklsShares[0].PartyID,
+		},
+		PartyIDs:  partyIDs,
+		Threshold: len(dklsShares),
+	}
+
+	result, err := processor.ReconstructPrivateKey(localState)
+	if err != nil {
+		return "", "", fmt.Errorf("error reconstructing private key: %w", err)
+	}
+
+	// For CLI, we'll derive a pseudo chain code from the private key
+	// This mimics what the WASM library would provide
+	privateKeyBytes, err := hex.DecodeString(result.PrivateKeyHex)
+	if err != nil {
+		return "", "", fmt.Errorf("error decoding private key: %w", err)
+	}
+
+	// Generate a deterministic chain code from the private key
+	hasher := sha256.New()
+	hasher.Write(privateKeyBytes)
+	hasher.Write([]byte("chaincode"))
+	chainCodeBytes := hasher.Sum(nil)
+
+	return result.PrivateKeyHex, hex.EncodeToString(chainCodeBytes), nil
+}
+
+// parseDKLSVaultFile parses a DKLS vault file and extracts the keyshare data
+func parseDKLSVaultFile(fileContent []byte, password, filename string) ([]byte, string, error) {
+	// Try to decode as base64 first
+	var vaultContainerData []byte
+	base64String := string(fileContent)
+	decoded, err := base64.StdEncoding.DecodeString(base64String)
+	if err == nil && len(decoded) > 100 {
+		vaultContainerData = decoded
+	} else {
+		vaultContainerData = fileContent
+	}
+
+	// Parse as VaultContainer
+	var vaultContainer v1.VaultContainer
+	if err := proto.Unmarshal(vaultContainerData, &vaultContainer); err != nil {
+		return nil, "", fmt.Errorf("failed to parse VaultContainer: %w", err)
+	}
+
+	// Handle encrypted/unencrypted vault
+	var vaultData []byte
+	if vaultContainer.IsEncrypted {
+		decryptedVault, err := encryption.DecryptVault(&vaultContainer, filename, password, types.CommandLine)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to decrypt vault: %w", err)
+		}
+		vaultData, err = proto.Marshal(decryptedVault)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to marshal decrypted vault: %w", err)
+		}
+	} else {
+		vaultData, err = base64.StdEncoding.DecodeString(vaultContainer.Vault)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to decode unencrypted vault: %w", err)
+		}
+	}
+
+	// Parse the vault
+	var vault v1.Vault
+	if err := proto.Unmarshal(vaultData, &vault); err != nil {
+		return nil, "", fmt.Errorf("failed to parse vault: %w", err)
+	}
+
+	if len(vault.KeyShares) == 0 {
+		return nil, "", fmt.Errorf("no keyshares found in vault")
+	}
+
+	// Extract keyshare data
+	keyshareString := vault.KeyShares[0].Keyshare
+	if keyshareString == "" {
+		return nil, "", fmt.Errorf("empty keyshare data")
+	}
+
+	// Try to decode the keyshare string
+	var keyshareData []byte
+	if strings.HasPrefix(keyshareString, "0x") || len(keyshareString)%2 == 0 {
+		// Try hex decoding
+		keyshareData, err = hex.DecodeString(strings.TrimPrefix(keyshareString, "0x"))
+		if err != nil {
+			// Try base64 decoding
+			keyshareData, err = base64.StdEncoding.DecodeString(keyshareString)
+			if err != nil {
+				// Use raw bytes
+				keyshareData = []byte(keyshareString)
+			}
+		}
+	} else {
+		// Try base64 first
+		keyshareData, err = base64.StdEncoding.DecodeString(keyshareString)
+		if err != nil {
+			// Use raw bytes
+			keyshareData = []byte(keyshareString)
+		}
+	}
+
+	partyID := vault.LocalPartyId
+	if partyID == "" {
+		partyID = fmt.Sprintf("party_%s", filename)
+	}
+
+	return keyshareData, partyID, nil
 }

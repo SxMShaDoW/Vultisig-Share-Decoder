@@ -1,4 +1,3 @@
-
 package keyhandlers
 
 import (
@@ -6,7 +5,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 )
 
-// CoinConfig represents the configuration for a cryptocurrency
+// CoinConfig represents configuration for a supported cryptocurrency
 type CoinConfig struct {
 	Name       string
 	DerivePath string
