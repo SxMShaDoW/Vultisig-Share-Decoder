@@ -433,6 +433,11 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         const publicKeyBytes = keyshares[0].publicKey();
         const publicKeyHex = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
+        debugLog("Getting root chain code...");
+        const rootChainCodeBytes = keyshares[0].rootChainCode();
+        const rootChainCodeHex = Array.from(rootChainCodeBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        debugLog(`Root Chain Code: ${rootChainCodeHex}`);
+
         // Create results in the expected format
         const results = `
 DKLS Key Recovery Results:
