@@ -1,4 +1,3 @@
-
 package keyhandlers
 
 import (
@@ -258,7 +257,7 @@ func ProcessRootKeyForCoins(rootPrivateKeyBytes []byte, rootChainCodeBytes []byt
 	// Create extended key for derivation
 	net := &chaincfg.MainNetParams
 	fmt.Fprintf(outputBuilder, "\nchaincode: %s\n", hex.EncodeToString(rootChainCodeBytes))
-	
+
 	extendedPrivateKey := hdkeychain.NewExtendedKey(
 		net.HDPrivateKeyID[:], 
 		privateKey.Serialize(), 
@@ -273,18 +272,70 @@ func ProcessRootKeyForCoins(rootPrivateKeyBytes []byte, rootChainCodeBytes []byt
 	// Process each coin configuration
 	for _, coin := range coinConfigs {
 		fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.Name)
-		
+
 		key, err := GetDerivedPrivateKeys(coin.DerivePath, extendedPrivateKey)
 		if err != nil {
 			return fmt.Errorf("error deriving private key for %s: %w", coin.Name, err)
 		}
-		
+
 		fmt.Fprintf(outputBuilder, "\nprivate key for %s: %s \n", coin.Name, key.String())
-		
+
 		if err := coin.Action(key, outputBuilder); err != nil {
 			fmt.Printf("error showing keys for %s: %v\n", coin.Name, err)
 		}
 	}
 
 	return nil
+}
+
+// GetSupportedCoins returns all supported cryptocurrency configurations
+func GetSupportedCoins() []CoinConfig {
+	return []CoinConfig{
+		{
+			Name:       "Bitcoin",
+			DerivePath: "m/84'/0'/0'/0/0",
+			Action:     ShowBitcoinKey,
+		},
+		{
+			Name:       "Bitcoin Cash",
+			DerivePath: "m/44'/145'/0'/0/0",
+			Action:     ShowBitcoinCashKey,
+		},
+		{
+			Name:       "Dogecoin",
+			DerivePath: "m/44'/3'/0'/0/0",
+			Action:     ShowDogecoinKey,
+		},
+		{
+			Name:       "Litecoin",
+			DerivePath: "m/84'/2'/0'/0/0",
+			Action:     ShowLitecoinKey,
+		},
+		{
+			Name:       "Ethereum",
+			DerivePath: "m/44'/60'/0'/0/0",
+			Action:     ShowEthereumKey,
+		},
+		{
+			Name:       "THORChain",
+			DerivePath: "m/44'/931'/0'/0/0",
+			Action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return CosmosLikeKeyHandler(key, "thor", "thorv", "thorc", output, "THORChain")
+			},
+		},
+		{
+			Name:       "MayaChain",
+			DerivePath: "m/44'/931'/0'/0/0",
+			Action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return CosmosLikeKeyHandler(key, "maya", "mayav", "mayac", output, "MayaChain")
+			},
+		},
+		{
+			Name:       "Cosmos",
+			DerivePath: "m/44'/118'/0'/0/0",
+			Action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
+				return CosmosLikeKeyHandler(key, "cosmos", "cosmosvaloper", "cosmosvalcons", output, "Cosmos")
+			},
+		},
+	}
 }
