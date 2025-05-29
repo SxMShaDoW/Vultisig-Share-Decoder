@@ -43,13 +43,13 @@ func DetectSchemeType(content []byte) types.SchemeType {
 	vault := &v1.Vault{}
 	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
 		log.Printf("Vault Name: %s", vault.Name)
-		
+
 		// Check if it has the reshare_prefix field (DKLS specific)
 		if vault.ResharePrefix != "" {
 			log.Printf("Detected DKLS scheme based on reshare_prefix field")
 			return types.DKLS
 		}
-		
+
 		// Check for DKLS by examining keyshare format
 		if len(vault.KeyShares) > 0 {
 			// DKLS keyshares are typically not valid JSON
@@ -59,7 +59,7 @@ func DetectSchemeType(content []byte) types.SchemeType {
 				return types.DKLS
 			}
 		}
-		
+
 		log.Printf("Detected GG20 scheme")
 		return types.GG20
 	}
@@ -105,7 +105,7 @@ func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 			shareData.ShareData = []byte(keyshareData)
 			log.Printf("DKLS keyshare data length: %d bytes", len(shareData.ShareData))
 			log.Printf("Keyshare preview: %s", string(shareData.ShareData[:min(len(shareData.ShareData), 100)]))
-			
+
 			// If there are multiple keyshares, log them all
 			for j, ks := range vault.KeyShares {
 				log.Printf("Keyshare %d: PublicKey=%s, Length=%d bytes", 
@@ -165,7 +165,7 @@ func ParseDKLSVault(content []byte) (*v1.Vault, dkls.DKLSShareData, error) {
 	}
 
 	log.Printf("ParseDKLSVault: Successfully parsed vault '%s' with %d keyshares", vault.Name, len(vault.KeyShares))
-	
+
 	// Check lib_type to confirm this is a DKLS vault (lib_type = 1)
 	// Note: The protobuf field might be named differently in the actual struct
 	log.Printf("ParseDKLSVault: Vault appears to be DKLS format based on structure")

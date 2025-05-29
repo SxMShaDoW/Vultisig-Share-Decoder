@@ -66,12 +66,18 @@ func (w *DKLSWrapper) ExportKey(shares []DKLSShareData, partyIDs []string, thres
 		return nil, fmt.Errorf("insufficient shares: need %d, got %d", threshold, len(shares))
 	}
 
-	// Convert shares to WASM format
+	log.Printf("ExportKey: Processing %d shares with threshold %d", len(shares), threshold)
+
+	// Convert shares to WASM format - use the raw keyshare bytes
 	wasmShares := make([]WASMShareData, len(shares))
 	for i, share := range shares {
+		// Log keyshare data for debugging
+		log.Printf("ExportKey: Share %d - ID: %s, PartyID: %s, Data length: %d", 
+			i, share.ID, share.PartyID, len(share.ShareData))
+		
 		wasmShares[i] = WASMShareData{
 			ID:        share.ID,
-			ShareData: hex.EncodeToString(share.ShareData),
+			ShareData: hex.EncodeToString(share.ShareData), // Convert to hex for WASM
 			PartyID:   share.PartyID,
 		}
 	}
@@ -129,6 +135,7 @@ async function runDKLS() {
         await init('file://' + path.resolve('%s'));
 
         const request = %s;
+        console.error('Processing', request.shares.length, 'shares with threshold', request.threshold);
 
         // Convert shares to the format expected by WASM
         let reconstructedKey = null;
@@ -136,36 +143,57 @@ async function runDKLS() {
 
         if (request.shares && request.shares.length >= request.threshold) {
             try {
-                // Take first share and create session
-                const firstShare = request.shares[0];
-                const partyIds = request.partyIds.join(',');
-
-                // Create key export session
-                const session = KeyExportSession.new(firstShare.shareData, partyIds);
-
-                // Get setup message (if needed for multi-party protocol)
-                const setupMsg = session.getsetup();
-
-                // For single-party reconstruction, directly finish
-                const privateKeyBytes = session.finish();
-                reconstructedKey = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-                // Try to get public key from share
-                try {
-                    const keyshare = Keyshare.fromBytes(Buffer.from(firstShare.shareData, 'hex'));
-                    const pubKeyBytes = keyshare.publicKey();
-                    publicKey = Array.from(pubKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-                } catch (pubKeyError) {
-                    console.error('Could not extract public key:', pubKeyError.message);
-                    publicKey = "unavailable";
+                // Process each share to extract public key info
+                for (let i = 0; i < request.shares.length; i++) {
+                    const share = request.shares[i];
+                    console.error('Share', i, '- ID:', share.id, 'PartyID:', share.partyId, 'Data length:', share.shareData.length);
+                    
+                    try {
+                        // Try to create keyshare from raw data
+                        const keyshareBytes = Buffer.from(share.shareData, 'hex');
+                        const keyshare = Keyshare.fromBytes(keyshareBytes);
+                        
+                        // Extract public key
+                        const pubKeyBytes = keyshare.publicKey();
+                        const pubKey = Array.from(pubKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                        console.error('Share', i, 'public key:', pubKey);
+                        
+                        if (!publicKey) {
+                            publicKey = pubKey;
+                        }
+                        
+                        // Try key export with this share
+                        if (i === 0) {
+                            try {
+                                const session = KeyExportSession.new(share.shareData, request.partyIds.join(','));
+                                const privateKeyBytes = session.finish();
+                                reconstructedKey = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                                console.error('Successfully reconstructed private key from share', i);
+                            } catch (exportError) {
+                                console.error('Key export failed for share', i, ':', exportError.message);
+                            }
+                        }
+                        
+                    } catch (shareError) {
+                        console.error('Failed to process share', i, ':', shareError.message);
+                    }
                 }
 
-                console.log(JSON.stringify({
-                    privateKey: reconstructedKey,
-                    publicKey: publicKey,
-                    success: true,
-                    error: ""
-                }));
+                if (reconstructedKey) {
+                    console.log(JSON.stringify({
+                        privateKey: reconstructedKey,
+                        publicKey: publicKey || "unavailable",
+                        success: true,
+                        error: ""
+                    }));
+                } else {
+                    console.log(JSON.stringify({
+                        privateKey: "",
+                        publicKey: publicKey || "unavailable",
+                        success: false,
+                        error: "Could not reconstruct private key from any share"
+                    }));
+                }
 
             } catch (reconstructError) {
                 console.log(JSON.stringify({
