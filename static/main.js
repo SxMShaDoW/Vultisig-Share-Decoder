@@ -12,9 +12,8 @@ function debugLog(message) {
     debugOutput.innerHTML += `${timestamp}: ${message}\n`;
 }
 
-// Import protobuf functions and schemas
-import { fromBinary } from '@bufbuild/protobuf';
-import { VaultContainerSchema, VaultSchema } from './vault_pb.js';
+// Import vanilla JS protobuf functions
+import { parseVaultContainer, parseVault, LibType } from './vault_pb.js';
 import { decryptWithAesGcm, fromBase64 } from './aes_gcm.js';
 
 // Initialize WASM modules
@@ -151,7 +150,7 @@ async function parseAndDecryptVault(fileData, password) {
         // Step 2: Parse as VaultContainer (encrypted vault)
         let vaultContainer;
         try {
-            vaultContainer = fromBinary(VaultContainerSchema, vaultContainerData);
+            vaultContainer = parseVaultContainer(vaultContainerData);
             debugLog(`Parsed VaultContainer - version: ${vaultContainer.version}, encrypted: ${vaultContainer.isEncrypted}`);
         } catch (error) {
             debugLog(`Failed to parse as VaultContainer: ${error.message}`);
@@ -180,7 +179,7 @@ async function parseAndDecryptVault(fileData, password) {
         // Step 5: Parse the vault protobuf to extract keyshare
         let vault;
         try {
-            vault = fromBinary(VaultSchema, vaultData);
+            vault = parseVault(vaultData);
             debugLog(`Parsed vault: ${vault.name}, keyshares: ${vault.keyShares.length}, libType: ${vault.libType}`);
         } catch (error) {
             debugLog(`Failed to parse vault protobuf: ${error.message}`);
