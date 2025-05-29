@@ -44,6 +44,10 @@ func main() {
                         Usage:    "private key in hex format",
                         Required: true,
                     },
+                    &cli.StringFlag{
+                        Name:  "chaincode",
+                        Usage: "chaincode in hex format (optional, will generate from private key if not provided)",
+                    },
                 },
                 Action: TestAddressAction,
                 Usage:  "test address generation from private key",

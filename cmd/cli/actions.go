@@ -261,8 +261,9 @@ func ProcessGG20Files(fileInfos []types.FileInfo, passwords []string, source typ
 
 func TestAddressAction(c *cli.Context) error {
 	privateKeyHex := c.String("private-key")
+	chaincodeHex := c.String("chaincode")
 
-	fmt.Printf("Testing HD derivation for root private key: %s\n\n", privateKeyHex)
+	fmt.Printf("Testing HD derivation for root private key: %s\n", privateKeyHex)
 
 	// Decode the hex private key
 	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
@@ -277,8 +278,23 @@ func TestAddressAction(c *cli.Context) error {
 	// Create secp256k1 private key
 	privateKey := secp256k1.PrivKeyFromBytes(privateKeyBytes)
 	
-	// Create chaincode using SHA256 of the private key (similar to DKLS approach)
-	chaincode := sha256.Sum256(privateKeyBytes)
+	// Handle chaincode - use provided one or generate from private key
+	var chaincode [32]byte
+	if chaincodeHex != "" {
+		fmt.Printf("Using provided chaincode: %s\n\n", chaincodeHex)
+		chaincodeBytes, err := hex.DecodeString(chaincodeHex)
+		if err != nil {
+			return fmt.Errorf("invalid hex chaincode: %w", err)
+		}
+		if len(chaincodeBytes) != 32 {
+			return fmt.Errorf("chaincode must be 32 bytes, got %d bytes", len(chaincodeBytes))
+		}
+		copy(chaincode[:], chaincodeBytes)
+	} else {
+		// Create chaincode using SHA256 of the private key (similar to DKLS approach)
+		fmt.Printf("Generating chaincode from private key\n\n")
+		chaincode = sha256.Sum256(privateKeyBytes)
+	}
 	
 	// Create extended private key (master key)
 	net := &chaincfg.MainNetParams
