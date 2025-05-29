@@ -317,10 +317,21 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         }
 
         debugLog(`Successfully created ${keyshares.length} keyshares`);
+        
+        // Verify all keyshares have the same key ID (they should be shares of the same key)
+        const firstKeyId = keyIds[0];
+        for (let i = 1; i < keyIds.length; i++) {
+            if (keyIds[i] !== firstKeyId) {
+                debugLog(`Warning: Key ID mismatch - Share 1: ${firstKeyId}, Share ${i + 1}: ${keyIds[i]}`);
+                // Continue anyway as some implementations might have slight variations
+            }
+        }
+
         debugLog("Creating KeyExportSession...");
 
-        // Create the export session with the first keyshare and all key IDs
-        const session = KeyExportSession.new(keyshares[0], keyIds);
+        // Create the export session with the first keyshare and all unique key IDs
+        const uniqueKeyIds = [...new Set(keyIds)]; // Remove duplicates
+        const session = KeyExportSession.new(keyshares[0], uniqueKeyIds);
         if (!session) {
             throw new Error("Failed to create KeyExportSession");
         }
@@ -331,34 +342,53 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
             throw new Error("Failed to get setup message");
         }
 
-        debugLog(`Setup message length: ${setupMessage.length}`);
+        debugLog(`Setup message length: ${setupMessage.length} bytes`);
 
-        // Export shares from all keyshares (starting from the second one)
-        debugLog("Exporting shares...");
+        // Process remaining keyshares to extract encrypted material
+        debugLog("Processing remaining keyshares...");
         for (let i = 1; i < keyshares.length; i++) {
-            debugLog(`Exporting share ${i + 1}...`);
-            const message = KeyExportSession.exportShare(setupMessage, keyIds[i], keyshares[i]);
+            debugLog(`Processing keyshare ${i + 1}...`);
+            
+            try {
+                // Export the encrypted material from this keyshare
+                const message = KeyExportSession.exportShare(setupMessage, keyIds[i], keyshares[i]);
 
-            if (!message || !message.body) {
-                throw new Error(`Failed to export share ${i + 1}`);
+                if (!message) {
+                    throw new Error(`exportShare returned null for keyshare ${i + 1}`);
+                }
+
+                if (!message.body) {
+                    throw new Error(`exportShare returned message without body for keyshare ${i + 1}`);
+                }
+
+                const messageBody = message.body;
+                debugLog(`Keyshare ${i + 1} exported message, length: ${messageBody.length} bytes`);
+
+                // Input the encrypted message to the session
+                const isComplete = session.inputMessage(messageBody);
+                debugLog(`Message ${i + 1} processed, session complete: ${isComplete}`);
+
+            } catch (shareError) {
+                debugLog(`Error processing keyshare ${i + 1}: ${shareError.message}`);
+                throw new Error(`Failed to process keyshare ${i + 1}: ${shareError.message}`);
             }
-
-            const messageBody = message.body;
-            debugLog(`Share ${i + 1} exported, message length: ${messageBody.length}`);
-
-            // Input the message to the session
-            const isComplete = session.inputMessage(messageBody);
-            debugLog(`Message ${i + 1} processed, session complete: ${isComplete}`);
         }
 
         debugLog("Finishing session to extract private key...");
-        const privateKeyBytes = session.finish();
+        let privateKeyBytes;
+        try {
+            privateKeyBytes = session.finish();
+        } catch (finishError) {
+            debugLog(`Session finish failed: ${finishError.message}`);
+            throw new Error(`Failed to finish DKLS session: ${finishError.message}`);
+        }
 
-        if (!privateKeyBytes) {
-            throw new Error("Failed to finish session and extract private key");
+        if (!privateKeyBytes || privateKeyBytes.length === 0) {
+            throw new Error("Session finished but returned empty private key");
         }
 
         const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        debugLog(`Extracted private key: ${privateKeyHex.substring(0, 16)}... (${privateKeyBytes.length} bytes)`);
 
         debugLog("Getting public key...");
         const publicKeyBytes = keyshares[0].publicKey();
