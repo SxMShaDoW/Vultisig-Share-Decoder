@@ -23,7 +23,6 @@ import (
 	"main/pkg/keyhandlers"
 	"main/pkg/keyprocessing"
 	"main/pkg/shared"
-	"main/pkg/dkls"
 )
 
 func ProcessFiles(files []string, passwords []string, source types.InputSource) (string, error) {
