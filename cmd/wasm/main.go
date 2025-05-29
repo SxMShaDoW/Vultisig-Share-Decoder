@@ -61,55 +61,6 @@ func main() {
         return result
     }))
 
-	js.Global().Set("getDerivedPrivateKey", js.FuncOf(getDerivedPrivateKey))
-	js.Global().Set("showXKeys", js.FuncOf(showXKeys))
-
     log.Println("WASM initialization complete, waiting for JS calls...")
     <-c
-}
-
-// getDerivedPrivateKey derives private keys for different chains using HD derivation
-func getDerivedPrivateKey(this js.Value, args []js.Value) interface{} {
-	if len(args) < 2 {
-		return "Error: getDerivedPrivateKey requires privateKey and rootChainCode arguments"
-	}
-
-	privateKeyHex := args[0].String()
-	rootChainCodeHex := args[1].String()
-
-	// Validate input format
-	if privateKeyHex == "" || rootChainCodeHex == "" {
-		return "Error: privateKey and rootChainCode cannot be empty"
-	}
-
-	// Use the existing key handlers to derive keys
-	result, err := keyhandlers.DeriveKeysFromPrivateKey(privateKeyHex, rootChainCodeHex)
-	if err != nil {
-		return fmt.Sprintf("Error deriving keys: %v", err)
-	}
-
-	return result
-}
-
-// showXKeys shows extended public keys and addresses
-func showXKeys(this js.Value, args []js.Value) interface{} {
-	if len(args) < 2 {
-		return "Error: showXKeys requires privateKey and rootChainCode arguments"
-	}
-
-	privateKeyHex := args[0].String()
-	rootChainCodeHex := args[1].String()
-
-	// Validate input format
-	if privateKeyHex == "" || rootChainCodeHex == "" {
-		return "Error: privateKey and rootChainCode cannot be empty"
-	}
-
-	// Use the existing key handlers to show extended keys
-	result, err := keyhandlers.ShowExtendedKeys(privateKeyHex, rootChainCodeHex)
-	if err != nil {
-		return fmt.Sprintf("Error showing extended keys: %v", err)
-	}
-
-	return result
 }
