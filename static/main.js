@@ -266,13 +266,49 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         const keyshares = [];
         const keyIds = [];
 
-        // Process each vault file
+        // Process each vault file and extract vault info
+        const vaultInfos = [];
+        
         for (let i = 0; i < files.length; i++) {
             debugLog(`Processing file ${i + 1}: ${fileNames[i]}`);
             const password = passwords[i] || "";
 
             try {
-                // Parse and decrypt vault container
+                // Parse and decrypt vault container first to get vault info
+                let vaultContainerData = files[i];
+                try {
+                    const base64String = new TextDecoder().decode(files[i]);
+                    const decoded = fromBase64(base64String);
+                    if (decoded.length > 100) {
+                        vaultContainerData = decoded;
+                    }
+                } catch (e) {
+                    // Not base64, use raw data
+                }
+
+                const vaultContainer = parseVaultContainer(vaultContainerData);
+                let vaultData;
+                if (vaultContainer.isEncrypted) {
+                    const encryptedVaultBytes = fromBase64(vaultContainer.vault);
+                    vaultData = await decryptWithAesGcm({
+                        key: password,
+                        value: encryptedVaultBytes
+                    });
+                } else {
+                    vaultData = fromBase64(vaultContainer.vault);
+                }
+
+                const vault = parseVault(vaultData);
+                
+                // Store vault info for later use
+                vaultInfos.push({
+                    name: vault.name || fileNames[i],
+                    localPartyId: vault.localPartyId || `party${i + 1}`,
+                    resharePrefix: vault.resharePrefix || '',
+                    filename: fileNames[i]
+                });
+
+                // Parse and decrypt vault container for keyshare data
                 const keyshareData = await parseAndDecryptVault(files[i], password);
                 debugLog(`Extracted keyshare data for file ${i + 1}, length: ${keyshareData.length} bytes`);
 
@@ -453,21 +489,20 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
             derivedKeysOutput = `\nError deriving keys: ${wasmError.message}`;
         }
 
-        // Create results in the expected format
+        // Collect all party IDs from vault info
+        const allPartyIds = vaultInfos.map(info => info.localPartyId).sort();
+        
+        // Create results in GG20 format
         const results = `
-DKLS Key Recovery Results:
-=========================
+${vaultInfos.map((vaultInfo, i) => {
+            return `Backup name: ${vaultInfo.filename}
+This Share: ${vaultInfo.localPartyId}
+All Shares: [${allPartyIds.join(' ')}]`;
+        }).join('\n\n')}
 
-Private Key: ${privateKeyHex}
-Public Key: ${publicKeyHex}
+Public Key(ECDSA): ${publicKeyHex}
 
-Root Chain Code: ${rootChainCodeHex}
-
-Share Details:
-${fileNames.map((name, i) => `Share ${i + 1}: ${name} (ID: ${keyIds[i]})`).join('\n')}
-
-Total shares processed: ${keyshares.length}
-Recovery successful: Yes
+Public Key(ECDSA): ${publicKeyHex}
 
 ${derivedKeysOutput}
         `.trim();
