@@ -3,7 +3,6 @@
 package main
 
 import (
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -23,7 +22,6 @@ import (
 	"main/pkg/keyhandlers"
 	"main/pkg/keyprocessing"
 	"main/pkg/shared"
-	"main/pkg/dkls"
 )
 
 func ProcessFiles(files []string, passwords []string, source types.InputSource) (string, error) {
@@ -456,7 +454,7 @@ func TestAddressAction(c *cli.Context) error {
 // This function mimics the WASM extraction process for consistency
 func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (privateKeyHex, chaincodeHex string, err error) {
 	// Use the same WASM processing logic to extract master key
-	result, err := shared.ProcessFileContent(fileInfos, passwords, types.CLI)
+	result, err := shared.ProcessFileContent(fileInfos, passwords, types.CommandLine)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to process DKLS files: %v", err)
 	}
