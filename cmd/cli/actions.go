@@ -278,7 +278,7 @@ func TestAddressAction(c *cli.Context) error {
 	// Create secp256k1 private key
 	privateKey := secp256k1.PrivKeyFromBytes(privateKeyBytes)
 	
-	// Handle chaincode - use provided one or generate from private key
+	// Handle chaincode - use provided one or extract from private key
 	var chaincode [32]byte
 	if chaincodeHex != "" {
 		fmt.Printf("Using provided chaincode: %s\n\n", chaincodeHex)
@@ -291,9 +291,20 @@ func TestAddressAction(c *cli.Context) error {
 		}
 		copy(chaincode[:], chaincodeBytes)
 	} else {
-		// Create chaincode using SHA256 of the private key (similar to DKLS approach)
-		fmt.Printf("Generating chaincode from private key\n\n")
-		chaincode = sha256.Sum256(privateKeyBytes)
+		// Extract chaincode using the same method as other functions
+		fmt.Printf("Extracting chaincode from private key (using DKLS method)\n\n")
+		
+		// Use the last 32 bytes as chaincode if we have more than 32 bytes
+		// or derive it using the DKLS pattern
+		if len(privateKeyBytes) >= 64 {
+			// Take the second 32 bytes as chaincode (similar to DKLS extraction)
+			copy(chaincode[:], privateKeyBytes[32:64])
+		} else {
+			// For 32-byte keys, use a deterministic derivation
+			// This follows the pattern used in DKLS processing
+			temp := sha256.Sum256(append(privateKeyBytes, []byte("chaincode")...))
+			chaincode = temp
+		}
 	}
 	
 	// Create extended private key (master key)
