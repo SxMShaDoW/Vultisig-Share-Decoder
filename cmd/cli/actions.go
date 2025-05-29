@@ -263,7 +263,12 @@ func TestAddressAction(c *cli.Context) error {
 	privateKeyHex := c.String("private-key")
 	chaincodeHex := c.String("chaincode")
 
+	if chaincodeHex == "" {
+		return fmt.Errorf("chaincode is required")
+	}
+
 	fmt.Printf("Testing HD derivation for root private key: %s\n", privateKeyHex)
+	fmt.Printf("Using provided chaincode: %s\n\n", chaincodeHex)
 
 	// Decode the hex private key
 	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
@@ -278,34 +283,16 @@ func TestAddressAction(c *cli.Context) error {
 	// Create secp256k1 private key
 	privateKey := secp256k1.PrivKeyFromBytes(privateKeyBytes)
 	
-	// Handle chaincode - use provided one or extract from private key
+	// Decode the chaincode
 	var chaincode [32]byte
-	if chaincodeHex != "" {
-		fmt.Printf("Using provided chaincode: %s\n\n", chaincodeHex)
-		chaincodeBytes, err := hex.DecodeString(chaincodeHex)
-		if err != nil {
-			return fmt.Errorf("invalid hex chaincode: %w", err)
-		}
-		if len(chaincodeBytes) != 32 {
-			return fmt.Errorf("chaincode must be 32 bytes, got %d bytes", len(chaincodeBytes))
-		}
-		copy(chaincode[:], chaincodeBytes)
-	} else {
-		// Extract chaincode using the same method as other functions
-		fmt.Printf("Extracting chaincode from private key (using DKLS method)\n\n")
-		
-		// Use the last 32 bytes as chaincode if we have more than 32 bytes
-		// or derive it using the DKLS pattern
-		if len(privateKeyBytes) >= 64 {
-			// Take the second 32 bytes as chaincode (similar to DKLS extraction)
-			copy(chaincode[:], privateKeyBytes[32:64])
-		} else {
-			// For 32-byte keys, use a deterministic derivation
-			// This follows the pattern used in DKLS processing
-			temp := sha256.Sum256(append(privateKeyBytes, []byte("chaincode")...))
-			chaincode = temp
-		}
+	chaincodeBytes, err := hex.DecodeString(chaincodeHex)
+	if err != nil {
+		return fmt.Errorf("invalid hex chaincode: %w", err)
 	}
+	if len(chaincodeBytes) != 32 {
+		return fmt.Errorf("chaincode must be 32 bytes, got %d bytes", len(chaincodeBytes))
+	}
+	copy(chaincode[:], chaincodeBytes)
 	
 	// Create extended private key (master key)
 	net := &chaincfg.MainNetParams

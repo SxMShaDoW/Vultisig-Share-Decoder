@@ -45,8 +45,9 @@ func main() {
                         Required: true,
                     },
                     &cli.StringFlag{
-                        Name:  "chaincode",
-                        Usage: "chaincode in hex format (optional, will generate from private key if not provided)",
+                        Name:     "chaincode",
+                        Usage:    "chaincode in hex format",
+                        Required: true,
                     },
                 },
                 Action: TestAddressAction,
