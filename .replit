@@ -21,9 +21,6 @@ ignorePorts = false
 deploymentTarget = "static"
 publicDir = "static"
 
-[objectStorage]
-defaultBucketID = "replit-objstore-149b9641-398f-4de6-9ec3-82b50061bd0c"
-
 [[ports]]
 localPort = 8080
 externalPort = 80
