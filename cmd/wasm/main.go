@@ -77,6 +77,11 @@ func getDerivedPrivateKey(this js.Value, args []js.Value) interface{} {
 	privateKeyHex := args[0].String()
 	rootChainCodeHex := args[1].String()
 
+	// Validate input format
+	if privateKeyHex == "" || rootChainCodeHex == "" {
+		return "Error: privateKey and rootChainCode cannot be empty"
+	}
+
 	// Use the existing key handlers to derive keys
 	result, err := keyhandlers.DeriveKeysFromPrivateKey(privateKeyHex, rootChainCodeHex)
 	if err != nil {
@@ -94,6 +99,11 @@ func showXKeys(this js.Value, args []js.Value) interface{} {
 
 	privateKeyHex := args[0].String()
 	rootChainCodeHex := args[1].String()
+
+	// Validate input format
+	if privateKeyHex == "" || rootChainCodeHex == "" {
+		return "Error: privateKey and rootChainCode cannot be empty"
+	}
 
 	// Use the existing key handlers to show extended keys
 	result, err := keyhandlers.ShowExtendedKeys(privateKeyHex, rootChainCodeHex)

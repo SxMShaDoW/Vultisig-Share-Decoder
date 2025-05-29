@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 )
 
 // DeriveKeysFromPrivateKey derives cryptocurrency keys from a private key and root chain code
@@ -22,11 +25,109 @@ func DeriveKeysFromPrivateKey(privateKeyHex, rootChainCodeHex string) (string, e
 		return "", fmt.Errorf("invalid root chain code hex: %v", err)
 	}
 	
-	// This would use the existing cryptocurrency derivation logic
-	// For now, return basic information
-	output.WriteString(fmt.Sprintf("Master Private Key: %s\n", privateKeyHex))
-	output.WriteString(fmt.Sprintf("Root Chain Code: %s\n", rootChainCodeHex))
-	output.WriteString("Derived keys for various cryptocurrencies would be generated here\n")
+	if len(privateKeyBytes) != 32 {
+		return "", fmt.Errorf("private key must be 32 bytes, got %d", len(privateKeyBytes))
+	}
+	
+	if len(rootChainCodeBytes) != 32 {
+		return "", fmt.Errorf("root chain code must be 32 bytes, got %d", len(rootChainCodeBytes))
+	}
+	
+	// Create extended key from private key and chain code
+	rootKey, err := hdkeychain.NewMaster(privateKeyBytes, &chaincfg.MainNetParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to create master key: %v", err)
+	}
+	
+	output.WriteString("=== Derived Cryptocurrency Keys ===\n\n")
+	
+	// Ethereum (m/44'/60'/0'/0/0)
+	ethKey, err := GetDerivedPrivateKeys("m/44'/60'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== Ethereum ===\n")
+		err = ShowEthereumKey(ethKey, &output)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing Ethereum key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
+	
+	// Bitcoin (m/84'/0'/0'/0/0)
+	btcKey, err := GetDerivedPrivateKeys("m/84'/0'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== Bitcoin ===\n")
+		err = ShowBitcoinKey(btcKey, &output)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing Bitcoin key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
+	
+	// Litecoin (m/84'/2'/0'/0/0)
+	ltcKey, err := GetDerivedPrivateKeys("m/84'/2'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== Litecoin ===\n")
+		err = ShowLitecoinKey(ltcKey, &output)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing Litecoin key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
+	
+	// Dogecoin (m/44'/3'/0'/0/0)
+	dogeKey, err := GetDerivedPrivateKeys("m/44'/3'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== Dogecoin ===\n")
+		err = ShowDogecoinKey(dogeKey, &output)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing Dogecoin key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
+	
+	// Bitcoin Cash (m/44'/145'/0'/0/0)
+	bchKey, err := GetDerivedPrivateKeys("m/44'/145'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== Bitcoin Cash ===\n")
+		err = ShowBitcoinCashKey(bchKey, &output)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing Bitcoin Cash key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
+	
+	// THORChain (m/44'/931'/0'/0/0)
+	thorKey, err := GetDerivedPrivateKeys("m/44'/931'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== THORChain ===\n")
+		err = ShowThorchainKey(thorKey, &output)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing THORChain key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
+	
+	// MAYAChain (m/44'/931'/0'/0/0)
+	mayaKey, err := GetDerivedPrivateKeys("m/44'/931'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== MAYAChain ===\n")
+		err = ShowMayachainKey(mayaKey, &output)
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing MAYAChain key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
+	
+	// Cosmos (m/44'/118'/0'/0/0)
+	cosmosKey, err := GetDerivedPrivateKeys("m/44'/118'/0'/0/0", rootKey)
+	if err == nil {
+		output.WriteString("=== Cosmos ===\n")
+		err = CosmosLikeKeyHandler(cosmosKey, "cosmos", "cosmosvaloper", "cosmosvalcons", &output, "Cosmos")
+		if err != nil {
+			output.WriteString(fmt.Sprintf("Error showing Cosmos key: %v\n", err))
+		}
+		output.WriteString("\n")
+	}
 	
 	return output.String(), nil
 }
@@ -46,11 +147,57 @@ func ShowExtendedKeys(privateKeyHex, rootChainCodeHex string) (string, error) {
 		return "", fmt.Errorf("invalid root chain code hex: %v", err)
 	}
 	
-	// This would generate extended keys
-	output.WriteString("Extended Public Keys:\n")
-	output.WriteString(fmt.Sprintf("Master Key: %s\n", privateKeyHex))
-	output.WriteString(fmt.Sprintf("Chain Code: %s\n", rootChainCodeHex))
-	output.WriteString("Extended keys for BIP32/BIP44 derivation would be generated here\n")
+	if len(privateKeyBytes) != 32 {
+		return "", fmt.Errorf("private key must be 32 bytes, got %d", len(privateKeyBytes))
+	}
+	
+	if len(rootChainCodeBytes) != 32 {
+		return "", fmt.Errorf("root chain code must be 32 bytes, got %d", len(rootChainCodeBytes))
+	}
+	
+	// Create extended key from private key and chain code
+	rootKey, err := hdkeychain.NewMaster(privateKeyBytes, &chaincfg.MainNetParams)
+	if err != nil {
+		return "", fmt.Errorf("failed to create master key: %v", err)
+	}
+	
+	output.WriteString("=== Extended Keys Information ===\n\n")
+	output.WriteString(fmt.Sprintf("Master Private Key: %s\n", privateKeyHex))
+	output.WriteString(fmt.Sprintf("Root Chain Code: %s\n", rootChainCodeHex))
+	output.WriteString(fmt.Sprintf("Master Extended Private Key: %s\n", rootKey.String()))
+	
+	// Get master public key
+	masterPubKey, err := rootKey.Neuter()
+	if err == nil {
+		output.WriteString(fmt.Sprintf("Master Extended Public Key: %s\n", masterPubKey.String()))
+	}
+	
+	output.WriteString("\n=== Standard Derivation Paths ===\n")
+	
+	// Common derivation paths
+	paths := map[string]string{
+		"Bitcoin (Native SegWit)": "m/84'/0'/0'",
+		"Bitcoin (SegWit)":        "m/49'/0'/0'",
+		"Bitcoin (Legacy)":        "m/44'/0'/0'",
+		"Ethereum":                "m/44'/60'/0'",
+		"Litecoin":                "m/84'/2'/0'",
+		"Dogecoin":                "m/44'/3'/0'",
+		"Bitcoin Cash":            "m/44'/145'/0'",
+		"THORChain":               "m/44'/931'/0'",
+		"Cosmos":                  "m/44'/118'/0'",
+	}
+	
+	for name, path := range paths {
+		derivedKey, err := GetDerivedPrivateKeys(path, rootKey)
+		if err == nil {
+			derivedPub, err := derivedKey.Neuter()
+			if err == nil {
+				output.WriteString(fmt.Sprintf("\n%s (%s):\n", name, path))
+				output.WriteString(fmt.Sprintf("  Extended Private Key: %s\n", derivedKey.String()))
+				output.WriteString(fmt.Sprintf("  Extended Public Key:  %s\n", derivedPub.String()))
+			}
+		}
+	}
 	
 	return output.String(), nil
 }
