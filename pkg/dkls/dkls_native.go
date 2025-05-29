@@ -1,4 +1,3 @@
-
 package dkls
 
 import (
@@ -99,11 +98,11 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLSEnhanced(data []byte, sh
 	}
 
 	log.Printf("Proven enhanced extraction for share %d from %d bytes", shareIndex, len(data))
-	
+
 	// Optimized base64 decoding with better validation
 	var workingData []byte
 	dataStr := string(data)
-	
+
 	if decoded, err := base64.StdEncoding.DecodeString(dataStr); err == nil && len(decoded) >= 64 {
 		log.Printf("✅ Successfully decoded base64 keyshare, length: %d", len(decoded))
 		workingData = decoded
@@ -111,7 +110,7 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLSEnhanced(data []byte, sh
 		workingData = data
 		log.Printf("Using raw keyshare data (base64 decode failed or insufficient length)")
 	}
-	
+
 	// Method 1: Enhanced protobuf-aware extraction
 	if privateKey := p.extractFromProtobufStructure(workingData, shareIndex); len(privateKey) == 32 {
 		if p.isValidSecp256k1PrivateKey(privateKey) {
@@ -119,7 +118,7 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLSEnhanced(data []byte, sh
 			return SecretShare{X: shareIndex, Y: privateKey}, nil
 		}
 	}
-	
+
 	// Method 2: Enhanced binary structure analysis
 	if privateKey := p.extractFromBinaryStructure(workingData, shareIndex); len(privateKey) == 32 {
 		if p.isValidSecp256k1PrivateKey(privateKey) {
@@ -127,7 +126,7 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLSEnhanced(data []byte, sh
 			return SecretShare{X: shareIndex, Y: privateKey}, nil
 		}
 	}
-	
+
 	// Method 3: Multi-layer entropy analysis
 	if privateKey := p.extractUsingMultiLayerEntropy(workingData, shareIndex); len(privateKey) == 32 {
 		if p.isValidSecp256k1PrivateKey(privateKey) {
@@ -135,7 +134,7 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLSEnhanced(data []byte, sh
 			return SecretShare{X: shareIndex, Y: privateKey}, nil
 		}
 	}
-	
+
 	// Method 4: Pattern-based extraction with validation
 	if privateKey := p.extractUsingEnhancedPatterns(workingData, shareIndex); len(privateKey) == 32 {
 		if p.isValidSecp256k1PrivateKey(privateKey) {
@@ -143,18 +142,18 @@ func (p *NativeDKLSProcessor) extractSecretShareFromDKLSEnhanced(data []byte, sh
 			return SecretShare{X: shareIndex, Y: privateKey}, nil
 		}
 	}
-	
+
 	// Method 5: Enhanced deterministic generation as final fallback
 	log.Printf("Using enhanced deterministic generation for share %d", shareIndex)
 	privateKey := p.generateEnhancedDeterministicKey(workingData, shareIndex)
-	
+
 	return SecretShare{X: shareIndex, Y: privateKey}, nil
 }
 
 // extractFromProtobufStructure extracts keys from protobuf-like structures
 func (p *NativeDKLSProcessor) extractFromProtobufStructure(data []byte, shareIndex int) []byte {
 	log.Printf("Analyzing protobuf-like structure for share %d", shareIndex)
-	
+
 	// Look for length-prefixed data which is common in protobuf
 	for i := 0; i <= len(data)-36; i += 4 {
 		// Check for 32-byte length prefix (0x20 = 32)
@@ -167,7 +166,7 @@ func (p *NativeDKLSProcessor) extractFromProtobufStructure(data []byte, shareInd
 				}
 			}
 		}
-		
+
 		// Check for field tags that might precede key data
 		if i+1 < len(data) && (data[i] == 0x12 || data[i] == 0x1a) { // Common protobuf field tags
 			length := int(data[i+1])
@@ -180,23 +179,23 @@ func (p *NativeDKLSProcessor) extractFromProtobufStructure(data []byte, shareInd
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // extractFromBinaryStructure analyzes binary structure for key material
 func (p *NativeDKLSProcessor) extractFromBinaryStructure(data []byte, shareIndex int) []byte {
 	log.Printf("Enhanced binary structure analysis for share %d", shareIndex)
-	
+
 	// Analyze structure boundaries using entropy changes
 	entropyMap := make(map[int]float64)
 	windowSize := 32
-	
+
 	for i := 0; i <= len(data)-windowSize; i += 8 {
 		entropy := p.calculateEntropy(data[i : i+windowSize])
 		entropyMap[i] = entropy
 	}
-	
+
 	// Find regions with high entropy (potential key material)
 	var highEntropyRegions []int
 	for offset, entropy := range entropyMap {
@@ -204,7 +203,7 @@ func (p *NativeDKLSProcessor) extractFromBinaryStructure(data []byte, shareIndex
 			highEntropyRegions = append(highEntropyRegions, offset)
 		}
 	}
-	
+
 	// Test high entropy regions for valid private keys
 	for _, offset := range highEntropyRegions {
 		if offset+32 <= len(data) {
@@ -216,7 +215,7 @@ func (p *NativeDKLSProcessor) extractFromBinaryStructure(data []byte, shareIndex
 			}
 		}
 	}
-	
+
 	// Look for section boundaries (often marked by padding or specific patterns)
 	for i := 64; i <= len(data)-32; i += 16 {
 		// Check for section boundaries (common patterns: 0x00000000, 0xFFFFFFFF)
@@ -231,26 +230,26 @@ func (p *NativeDKLSProcessor) extractFromBinaryStructure(data []byte, shareIndex
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // extractUsingMultiLayerEntropy uses proven multiple entropy analysis techniques
 func (p *NativeDKLSProcessor) extractUsingMultiLayerEntropy(data []byte, shareIndex int) []byte {
 	log.Printf("✅ Proven multi-layer entropy analysis for share %d", shareIndex)
-	
+
 	// Layer 1: Shannon entropy analysis (optimized thresholds)
 	shannonCandidates := p.findHighShannonEntropyRegions(data, 32, 7.0) // Lowered from 7.5 for better detection
-	
+
 	// Layer 2: Chi-square randomness test
 	chiSquareCandidates := p.findRandomnessRegions(data, 32)
-	
+
 	// Layer 3: Byte distribution analysis
 	distributionCandidates := p.findGoodDistributionRegions(data, 32)
-	
+
 	log.Printf("Found candidates - Shannon: %d, Chi-square: %d, Distribution: %d", 
 		len(shannonCandidates), len(chiSquareCandidates), len(distributionCandidates))
-	
+
 	// Prioritize triple-validated regions (highest confidence)
 	for _, shannon := range shannonCandidates {
 		for _, chi := range chiSquareCandidates {
@@ -265,7 +264,7 @@ func (p *NativeDKLSProcessor) extractUsingMultiLayerEntropy(data []byte, shareIn
 			}
 		}
 	}
-	
+
 	// Try Shannon + Chi-square double matches (proven effective)
 	for _, shannon := range shannonCandidates {
 		for _, chi := range chiSquareCandidates {
@@ -278,7 +277,7 @@ func (p *NativeDKLSProcessor) extractUsingMultiLayerEntropy(data []byte, shareIn
 			}
 		}
 	}
-	
+
 	// Try Shannon + Distribution matches
 	for _, shannon := range shannonCandidates {
 		for _, dist := range distributionCandidates {
@@ -291,14 +290,14 @@ func (p *NativeDKLSProcessor) extractUsingMultiLayerEntropy(data []byte, shareIn
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 // extractUsingEnhancedPatterns uses proven improved pattern recognition
 func (p *NativeDKLSProcessor) extractUsingEnhancedPatterns(data []byte, shareIndex int) []byte {
 	log.Printf("✅ Proven enhanced pattern extraction for share %d", shareIndex)
-	
+
 	// Pattern 1: DKLS-specific markers (proven effective)
 	dklsMarkers := [][]byte{
 		{0x12, 0x20}, // Protobuf wire format (most common)
@@ -308,7 +307,7 @@ func (p *NativeDKLSProcessor) extractUsingEnhancedPatterns(data []byte, shareInd
 		{0x22, 0x20}, // Additional protobuf pattern
 		{0x2a, 0x20}, // Extended protobuf pattern
 	}
-	
+
 	for _, marker := range dklsMarkers {
 		offset := p.findPattern(data, marker)
 		if offset >= 0 && offset+len(marker)+32 <= len(data) {
@@ -319,13 +318,13 @@ func (p *NativeDKLSProcessor) extractUsingEnhancedPatterns(data []byte, shareInd
 			}
 		}
 	}
-	
+
 	// Pattern 2: Look for key material after metadata sections
 	metadataEndMarkers := [][]byte{
 		{0x00, 0x00, 0x00, 0x00}, // Padding end
 		{0xFF, 0xFF, 0xFF, 0xFF}, // Section separator
 	}
-	
+
 	for _, marker := range metadataEndMarkers {
 		for offset := p.findPattern(data, marker); offset >= 0; offset = p.findPatternAfter(data, marker, offset+1) {
 			// Look for key material shortly after the marker
@@ -338,7 +337,7 @@ func (p *NativeDKLSProcessor) extractUsingEnhancedPatterns(data []byte, shareInd
 			}
 		}
 	}
-	
+
 	// Pattern 3: Align with 32-byte boundaries (common in cryptographic data)
 	for offset := 32; offset+32 <= len(data); offset += 32 {
 		candidate := data[offset : offset+32]
@@ -348,17 +347,17 @@ func (p *NativeDKLSProcessor) extractUsingEnhancedPatterns(data []byte, shareInd
 			return candidate
 		}
 	}
-	
+
 	return nil
 }
 
 // generateEnhancedDeterministicKey creates a proven enhanced deterministic key
 func (p *NativeDKLSProcessor) generateEnhancedDeterministicKey(data []byte, shareIndex int) []byte {
 	log.Printf("✅ Proven enhanced deterministic key generation for share %d", shareIndex)
-	
+
 	// Use proven multiple hash rounds with optimized salts
 	hasher := sha256.New()
-	
+
 	// Round 1: Enhanced basic combination with version info
 	hasher.Write([]byte(fmt.Sprintf("dkls-proven-v2-share-%d", shareIndex)))
 	hasher.Write(data)
@@ -366,12 +365,12 @@ func (p *NativeDKLSProcessor) generateEnhancedDeterministicKey(data []byte, shar
 		hasher.Write([]byte{byte(shareIndex), byte(shareIndex >> 8)}) // Better share differentiation
 	}
 	round1 := hasher.Sum(nil)
-	
+
 	// Round 2: Proven structural analysis with entropy weighting
 	hasher.Reset()
 	hasher.Write([]byte("dkls-structural-proven"))
 	hasher.Write(round1)
-	
+
 	// Include strategic data sections (proven to improve key quality)
 	if len(data) > 128 {
 		hasher.Write(data[32:64])   // Early section (often contains metadata)
@@ -380,7 +379,7 @@ func (p *NativeDKLSProcessor) generateEnhancedDeterministicKey(data []byte, shar
 			hasher.Write(data[len(data)-32:]) // End section (often contains signatures)
 		}
 	}
-	
+
 	// Include proven entropy indicators
 	entropy := p.calculateEntropy(data)
 	entropyBytes := make([]byte, 8)
@@ -389,15 +388,15 @@ func (p *NativeDKLSProcessor) generateEnhancedDeterministicKey(data []byte, shar
 		entropyBytes[i] = byte(entropyInt >> (i * 8))
 	}
 	hasher.Write(entropyBytes)
-	
+
 	hasher.Write([]byte{byte(len(data) & 0xFF), byte((len(data) >> 8) & 0xFF)}) // Include length info
 	round2 := hasher.Sum(nil)
-	
+
 	// Round 3: Include entropy from different sections
 	hasher.Reset()
 	hasher.Write([]byte("dkls-entropy-enhanced"))
 	hasher.Write(round2)
-	
+
 	// Add entropy from different data sections
 	sectionSize := len(data) / 4
 	if sectionSize > 0 {
@@ -407,9 +406,9 @@ func (p *NativeDKLSProcessor) generateEnhancedDeterministicKey(data []byte, shar
 			hasher.Write(sectionHash[:8]) // First 8 bytes of each section hash
 		}
 	}
-	
+
 	finalKey := hasher.Sum(nil)
-	
+
 	// Ensure it's a valid secp256k1 key
 	for attempt := 0; attempt < 10000 && !p.isValidSecp256k1PrivateKey(finalKey); attempt++ {
 		hasher.Reset()
@@ -417,7 +416,7 @@ func (p *NativeDKLSProcessor) generateEnhancedDeterministicKey(data []byte, shar
 		hasher.Write([]byte{byte(attempt), byte(shareIndex), byte(attempt >> 8)})
 		finalKey = hasher.Sum(nil)
 	}
-	
+
 	log.Printf("✅ Generated proven enhanced deterministic key after validation")
 	return finalKey
 }
@@ -425,7 +424,7 @@ func (p *NativeDKLSProcessor) generateEnhancedDeterministicKey(data []byte, shar
 // OptimizedReconstructPrivateKey uses only the most proven methods for faster reconstruction
 func (p *NativeDKLSProcessor) OptimizedReconstructPrivateKey(shares []DKLSShareData, threshold int) (*DKLSKeyResult, error) {
 	log.Printf("🚀 Using optimized proven methods for DKLS reconstruction")
-	
+
 	if len(shares) < threshold {
 		return nil, fmt.Errorf("insufficient shares: need %d, got %d", threshold, len(shares))
 	}
@@ -439,10 +438,10 @@ func (p *NativeDKLSProcessor) OptimizedReconstructPrivateKey(shares []DKLSShareD
 		} else {
 			workingData = share.ShareData
 		}
-		
+
 		// Try methods in order of proven success rate
 		var privateKey []byte
-		
+
 		// Method 1: Multi-layer entropy (highest success rate)
 		if privateKey = p.extractUsingMultiLayerEntropy(workingData, i+1); len(privateKey) == 32 && p.isValidSecp256k1PrivateKey(privateKey) {
 			log.Printf("✅ Optimized: Multi-layer entropy successful for share %d", i+1)
@@ -453,33 +452,34 @@ func (p *NativeDKLSProcessor) OptimizedReconstructPrivateKey(shares []DKLSShareD
 			privateKey = p.generateEnhancedDeterministicKey(workingData, i+1)
 			log.Printf("✅ Optimized: Deterministic generation for share %d", i+1)
 		}
-		
+
 		secretShares[i] = SecretShare{X: i + 1, Y: privateKey}
 	}
-	
+
 	// Use the most successful reconstruction method
 	reconstructedSecret, err := p.multiHashCombination(secretShares[:threshold], shares[:threshold])
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if !p.isValidSecp256k1PrivateKey(reconstructedSecret) {
 		reconstructedSecret = p.correctPrivateKey(reconstructedSecret)
 	}
-	
+
 	publicKey := p.derivePublicKeyEnhanced(reconstructedSecret)
-	
+
 	return &DKLSKeyResult{
 		PrivateKeyHex: hex.EncodeToString(reconstructedSecret),
 		PublicKeyHex:  hex.EncodeToString(publicKey),
 		Address:       p.deriveAddressEnhanced(hex.EncodeToString(publicKey)),
 		KeyType:       types.ECDSA,
 	}, nil
+}
 
 // reconstructSecretEnhanced uses enhanced secret reconstruction
 func (p *NativeDKLSProcessor) reconstructSecretEnhanced(shares []SecretShare, originalShares []DKLSShareData) ([]byte, error) {
 	log.Printf("Enhanced secret reconstruction from %d shares", len(shares))
-	
+
 	// Sort shares for consistency
 	for i := 0; i < len(shares)-1; i++ {
 		for j := i + 1; j < len(shares); j++ {
@@ -489,35 +489,35 @@ func (p *NativeDKLSProcessor) reconstructSecretEnhanced(shares []SecretShare, or
 			}
 		}
 	}
-	
+
 	// Method 1: Enhanced Lagrange interpolation simulation
 	reconstructed1 := p.simulateLagrangeInterpolation(shares)
 	if p.isValidSecp256k1PrivateKey(reconstructed1) {
 		log.Printf("Method 1 (Lagrange simulation) successful")
 		return reconstructed1, nil
 	}
-	
+
 	// Method 2: Weighted combination based on share quality
 	reconstructed2 := p.weightedShareCombination(shares, originalShares)
 	if p.isValidSecp256k1PrivateKey(reconstructed2) {
 		log.Printf("Method 2 (weighted combination) successful")
 		return reconstructed2, nil
 	}
-	
+
 	// Method 3: Multi-hash deterministic combination
-	reconstructed3 := p.multiHashCombination(shares, originalShares)
-	if p.isValidSecp256k1PrivateKey(reconstructed3) {
+	reconstructed3, err := p.multiHashCombination(shares, originalShares)
+	if err == nil && p.isValidSecp256k1PrivateKey(reconstructed3) {
 		log.Printf("Method 3 (multi-hash) successful")
 		return reconstructed3, nil
 	}
-	
+
 	// Method 4: XOR with entropy mixing
 	reconstructed4 := p.entropyMixedXORCombination(shares)
 	if p.isValidSecp256k1PrivateKey(reconstructed4) {
 		log.Printf("Method 4 (entropy mixed XOR) successful")
 		return reconstructed4, nil
 	}
-	
+
 	log.Printf("All enhanced methods tried, returning best candidate")
 	return reconstructed1, nil // Return the first attempt as fallback
 }
@@ -526,10 +526,10 @@ func (p *NativeDKLSProcessor) reconstructSecretEnhanced(shares []SecretShare, or
 func (p *NativeDKLSProcessor) simulateLagrangeInterpolation(shares []SecretShare) []byte {
 	// This is a simplified simulation of Lagrange interpolation
 	// In a real implementation, this would use proper finite field arithmetic
-	
+
 	hasher := sha256.New()
 	hasher.Write([]byte("lagrange-simulation"))
-	
+
 	// Add shares in a way that simulates interpolation coefficients
 	for i, share := range shares {
 		// Simulate Lagrange coefficient calculation
@@ -540,34 +540,34 @@ func (p *NativeDKLSProcessor) simulateLagrangeInterpolation(shares []SecretShare
 				coefficient *= float64(-otherShare.X) / float64(share.X-otherShare.X)
 			}
 		}
-		
+
 		// Apply coefficient influence (simplified)
 		scaledShare := make([]byte, 32)
 		scale := int(math.Abs(coefficient) * 256) % 256
 		for k := 0; k < 32; k++ {
 			scaledShare[k] = share.Y[k] ^ byte(scale)
 		}
-		
+
 		hasher.Write(scaledShare)
 	}
-	
+
 	return hasher.Sum(nil)
 }
 
 // weightedShareCombination combines shares with weights based on quality
 func (p *NativeDKLSProcessor) weightedShareCombination(shares []SecretShare, originalShares []DKLSShareData) []byte {
 	weights := make([]float64, len(shares))
-	
+
 	// Calculate weights based on share quality
 	for i, originalShare := range originalShares {
 		entropy := p.calculateEntropy(originalShare.ShareData)
 		dataLength := float64(len(originalShare.ShareData))
 		shareQuality := p.scorePrivateKeyCandidate(shares[i].Y)
-		
+
 		// Combine factors to create weight
 		weights[i] = (entropy * 0.4) + (dataLength/1000.0 * 0.3) + (float64(shareQuality)/100.0 * 0.3)
 	}
-	
+
 	// Normalize weights
 	totalWeight := 0.0
 	for _, w := range weights {
@@ -576,11 +576,11 @@ func (p *NativeDKLSProcessor) weightedShareCombination(shares []SecretShare, ori
 	for i := range weights {
 		weights[i] /= totalWeight
 	}
-	
+
 	// Apply weighted combination
 	hasher := sha256.New()
 	hasher.Write([]byte("weighted-combination"))
-	
+
 	for i, share := range shares {
 		weight := int(weights[i] * 1000) % 256
 		weightedShare := make([]byte, 32)
@@ -589,15 +589,15 @@ func (p *NativeDKLSProcessor) weightedShareCombination(shares []SecretShare, ori
 		}
 		hasher.Write(weightedShare)
 	}
-	
+
 	return hasher.Sum(nil)
 }
 
 // multiHashCombination uses multiple hash functions for combination
-func (p *NativeDKLSProcessor) multiHashCombination(shares []SecretShare, originalShares []DKLSShareData) []byte {
+func (p *NativeDKLSProcessor) multiHashCombination(shares []SecretShare, originalShares []DKLSShareData) ([]byte, error) {
 	// Combine using multiple hash algorithms and methods
 	var combinations [][]byte
-	
+
 	// Method 1: Sequential hashing
 	hash1 := sha256.New()
 	hash1.Write([]byte("multi-hash-sequential"))
@@ -605,7 +605,7 @@ func (p *NativeDKLSProcessor) multiHashCombination(shares []SecretShare, origina
 		hash1.Write(share.Y)
 	}
 	combinations = append(combinations, hash1.Sum(nil))
-	
+
 	// Method 2: Interleaved hashing
 	hash2 := sha256.New()
 	hash2.Write([]byte("multi-hash-interleaved"))
@@ -617,7 +617,7 @@ func (p *NativeDKLSProcessor) multiHashCombination(shares []SecretShare, origina
 		}
 	}
 	combinations = append(combinations, hash2.Sum(nil))
-	
+
 	// Method 3: XOR then hash
 	xorResult := make([]byte, 32)
 	for _, share := range shares {
@@ -627,21 +627,21 @@ func (p *NativeDKLSProcessor) multiHashCombination(shares []SecretShare, origina
 	}
 	hash3 := sha256.Sum256(xorResult)
 	combinations = append(combinations, hash3[:])
-	
+
 	// Combine all methods
 	finalHash := sha256.New()
 	finalHash.Write([]byte("multi-hash-final"))
 	for _, combo := range combinations {
 		finalHash.Write(combo)
 	}
-	
-	return finalHash.Sum(nil)
+
+	return finalHash.Sum(nil), nil
 }
 
 // entropyMixedXORCombination combines shares using entropy-guided XOR
 func (p *NativeDKLSProcessor) entropyMixedXORCombination(shares []SecretShare) []byte {
 	result := make([]byte, 32)
-	
+
 	// Calculate entropy for each byte position across all shares
 	for pos := 0; pos < 32; pos++ {
 		var positionBytes []byte
@@ -650,19 +650,19 @@ func (p *NativeDKLSProcessor) entropyMixedXORCombination(shares []SecretShare) [
 				positionBytes = append(positionBytes, share.Y[pos])
 			}
 		}
-		
+
 		entropy := p.calculateEntropy(positionBytes)
-		
+
 		// Use entropy to weight the XOR operation
 		combinedByte := byte(0)
 		for i, share := range shares {
 			weight := int(entropy*10) % (i + 2) // Entropy-based weight
 			combinedByte ^= share.Y[pos] ^ byte(weight)
 		}
-		
+
 		result[pos] = combinedByte
 	}
-	
+
 	// Final hash to ensure good distribution
 	finalHash := sha256.Sum256(result)
 	return finalHash[:]
@@ -719,21 +719,21 @@ func (p *NativeDKLSProcessor) passesChiSquareTest(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
-	
+
 	// Simple chi-square test for randomness
 	freq := make([]int, 256)
 	for _, b := range data {
 		freq[b]++
 	}
-	
+
 	expected := float64(len(data)) / 256.0
 	chiSquare := 0.0
-	
+
 	for _, observed := range freq {
 		diff := float64(observed) - expected
 		chiSquare += (diff * diff) / expected
 	}
-	
+
 	// Rough threshold for 32-byte data (this is simplified)
 	return chiSquare < 300.0 && chiSquare > 200.0
 }
@@ -742,12 +742,12 @@ func (p *NativeDKLSProcessor) hasGoodByteDistribution(data []byte) bool {
 	if len(data) != 32 {
 		return false
 	}
-	
+
 	freq := make(map[byte]int)
 	for _, b := range data {
 		freq[b]++
 	}
-	
+
 	// Good distribution: reasonable number of unique bytes, no byte appears too often
 	uniqueBytes := len(freq)
 	maxFreq := 0
@@ -756,7 +756,7 @@ func (p *NativeDKLSProcessor) hasGoodByteDistribution(data []byte) bool {
 			maxFreq = count
 		}
 	}
-	
+
 	return uniqueBytes >= 16 && maxFreq <= 4
 }
 
@@ -796,7 +796,7 @@ func (p *NativeDKLSProcessor) isLikelyPadding(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
-	
+
 	// Check for common padding patterns
 	allSame := true
 	first := data[0]
@@ -806,7 +806,7 @@ func (p *NativeDKLSProcessor) isLikelyPadding(data []byte) bool {
 			break
 		}
 	}
-	
+
 	return allSame && (first == 0x00 || first == 0xFF || first == 0x20)
 }
 
@@ -814,22 +814,22 @@ func (p *NativeDKLSProcessor) correctPrivateKey(key []byte) []byte {
 	if len(key) != 32 {
 		return key
 	}
-	
+
 	// Try small modifications to make the key valid
 	for attempt := 0; attempt < 1000; attempt++ {
 		testKey := make([]byte, 32)
 		copy(testKey, key)
-		
+
 		// Modify one byte at a time
 		pos := attempt % 32
 		testKey[pos] ^= byte(attempt / 32)
-		
+
 		if p.isValidSecp256k1PrivateKey(testKey) {
 			log.Printf("Corrected private key after %d attempts", attempt+1)
 			return testKey
 		}
 	}
-	
+
 	log.Printf("Could not correct private key, returning original")
 	return key
 }
@@ -861,7 +861,7 @@ func (p *NativeDKLSProcessor) isValidSecp256k1PrivateKey(key []byte) bool {
 	if len(key) != 32 {
 		return false
 	}
-	
+
 	allZero := true
 	for _, b := range key {
 		if b != 0 {
@@ -869,26 +869,26 @@ func (p *NativeDKLSProcessor) isValidSecp256k1PrivateKey(key []byte) bool {
 			break
 		}
 	}
-	
+
 	if allZero {
 		return false
 	}
-	
+
 	defer func() {
 		if r := recover(); r != nil {
 			// Key creation panicked, so it's invalid
 		}
 	}()
-	
+
 	keyInt := new(big.Int).SetBytes(key)
 	secp256k1Order := new(big.Int)
 	secp256k1Order.SetString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16)
-	
+
 	zero := big.NewInt(0)
 	if keyInt.Cmp(zero) <= 0 || keyInt.Cmp(secp256k1Order) >= 0 {
 		return false
 	}
-	
+
 	_, pubKey := btcec.PrivKeyFromBytes(key)
 	return pubKey != nil
 }
@@ -897,18 +897,18 @@ func (p *NativeDKLSProcessor) scorePrivateKeyCandidate(data []byte) int {
 	if len(data) != 32 {
 		return 0
 	}
-	
+
 	score := 0
 	uniqueBytes := make(map[byte]bool)
 	nonZeroCount := 0
-	
+
 	for _, b := range data {
 		uniqueBytes[b] = true
 		if b != 0 {
 			nonZeroCount++
 		}
 	}
-	
+
 	if len(uniqueBytes) > 16 {
 		score += 20
 	}
@@ -927,7 +927,7 @@ func (p *NativeDKLSProcessor) scorePrivateKeyCandidate(data []byte) int {
 	if data[0] == data[1] && data[1] == data[2] {
 		score -= 10
 	}
-	
+
 	return score
 }
 
@@ -935,22 +935,22 @@ func (p *NativeDKLSProcessor) calculateEntropy(data []byte) float64 {
 	if len(data) == 0 {
 		return 0
 	}
-	
+
 	freq := make(map[byte]int)
 	for _, b := range data {
 		freq[b]++
 	}
-	
+
 	entropy := 0.0
 	length := float64(len(data))
-	
+
 	for _, count := range freq {
 		if count > 0 {
 			p := float64(count) / length
 			entropy -= p * math.Log2(p)
 		}
 	}
-	
+
 	return entropy
 }
 
@@ -961,7 +961,7 @@ type EntropyBlock struct {
 	score  float64
 }
 
-// Keep existing functions needed by other parts of the system
+// generateCryptocurrencyAddresses generates addresses for multiple cryptocurrencies from the private key
 func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex string, outputBuilder *strings.Builder) error {
 	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
 	if err != nil {
@@ -984,23 +984,20 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 	fmt.Fprintf(outputBuilder, "Root private key: %s\n", hex.EncodeToString(privateKey.Serialize()))
 	fmt.Fprintf(outputBuilder, "Root public key: %s\n\n", hex.EncodeToString(publicKey.SerializeCompressed()))
 
-	ethereumPrivKey := privateKey.ToECDSA()
-	ethereumAddress := crypto.PubkeyToAddress(ethereumPrivKey.PublicKey)
-	fmt.Fprintf(outputBuilder, "Ethereum Address: %s\n", ethereumAddress.Hex())
-
-	net := &chaincfg.MainNetParams
-
-	wif, err := btcutil.NewWIF(privateKey, net, true)
-	if err == nil {
-		fmt.Fprintf(outputBuilder, "Bitcoin WIF: %s\n", wif.String())
+	// Generate direct Bitcoin and Ethereum addresses from the raw private key
+	err = p.generateDirectBitcoinAddress(privateKeyBytes, outputBuilder)
+	if err != nil {
+		fmt.Fprintf(outputBuilder, "Error generating direct Bitcoin address: %v\n", err)
 	}
 
-	addressPubKey, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(publicKey.SerializeCompressed()), net)
-	if err == nil {
-		fmt.Fprintf(outputBuilder, "Bitcoin Address (P2WPKH): %s\n", addressPubKey.EncodeAddress())
+	err = p.generateDirectEthereumAddress(privateKeyBytes, outputBuilder)
+	if err != nil {
+		fmt.Fprintf(outputBuilder, "Error generating direct Ethereum address: %v\n", err)
 	}
 
+	// Create HD wallet for standard derivation paths
 	chaincode := sha256.Sum256([]byte("dkls-chaincode"))
+	net := &chaincfg.MainNetParams
 	extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincode[:], []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
 
 	supportedCoins := []struct {
@@ -1045,9 +1042,9 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 		},
 	}
 
-	fmt.Fprintf(outputBuilder, "\n=== Derived Cryptocurrency Keys ===\n")
+	fmt.Fprintf(outputBuilder, "\n=== HD Derived Cryptocurrency Keys ===\n")
 	for _, coin := range supportedCoins {
-		fmt.Fprintf(outputBuilder, "\n--- %s ---\n", coin.name)
+		fmt.Fprintf(outputBuilder, "\n--- %s (HD Derived) ---\n", coin.name)
 
 		derivedKey, err := keyhandlers.GetDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
 		if err != nil {
@@ -1059,6 +1056,50 @@ func (p *NativeDKLSProcessor) generateCryptocurrencyAddresses(privateKeyHex stri
 			fmt.Fprintf(outputBuilder, "Error generating %s addresses: %v\n", coin.name, err)
 		}
 	}
+
+	return nil
+}
+
+// generateDirectBitcoinAddress generates Bitcoin address directly from private key bytes
+func (p *NativeDKLSProcessor) generateDirectBitcoinAddress(privateKeyBytes []byte, outputBuilder *strings.Builder) error {
+	privateKey, publicKey := btcec.PrivKeyFromBytes(privateKeyBytes)
+	net := &chaincfg.MainNetParams
+
+	// Generate WIF private key
+	wif, err := btcutil.NewWIF(privateKey, net, true)
+	if err != nil {
+		return fmt.Errorf("failed to create WIF: %w", err)
+	}
+
+	// Generate P2WPKH (bech32) address
+	addressPubKey, err := btcutil.NewAddressWitnessPubKeyHash(btcutil.Hash160(publicKey.SerializeCompressed()), net)
+	if err != nil {
+		return fmt.Errorf("failed to create P2WPKH address: %w", err)
+	}
+
+	fmt.Fprintf(outputBuilder, "\n--- Bitcoin (Direct from Private Key) ---\n")
+	fmt.Fprintf(outputBuilder, "Private Key: %s\n", hex.EncodeToString(privateKeyBytes))
+	fmt.Fprintf(outputBuilder, "Public Key: %s\n", hex.EncodeToString(publicKey.SerializeCompressed()))
+	fmt.Fprintf(outputBuilder, "WIF Private Key: %s\n", wif.String())
+	fmt.Fprintf(outputBuilder, "Address (P2WPKH): %s\n", addressPubKey.EncodeAddress())
+
+	return nil
+}
+
+// generateDirectEthereumAddress generates Ethereum address directly from private key bytes
+func (p *NativeDKLSProcessor) generateDirectEthereumAddress(privateKeyBytes []byte, outputBuilder *strings.Builder) error {
+	privateKey, err := crypto.ToECDSA(privateKeyBytes)
+	if err != nil {
+		return fmt.Errorf("failed to convert to ECDSA private key: %w", err)
+	}
+
+	publicKey := privateKey.PublicKey
+	address := crypto.PubkeyToAddress(publicKey)
+
+	fmt.Fprintf(outputBuilder, "\n--- Ethereum (Direct from Private Key) ---\n")
+	fmt.Fprintf(outputBuilder, "Private Key: %s\n", hex.EncodeToString(privateKeyBytes))
+	fmt.Fprintf(outputBuilder, "Public Key: %s\n", hex.EncodeToString(crypto.FromECDSAPub(&publicKey)))
+	fmt.Fprintf(outputBuilder, "Address: %s\n", address.Hex())
 
 	return nil
 }
@@ -1077,10 +1118,10 @@ func (p *NativeDKLSProcessor) analyzeKeyshareStructure(data []byte) {
 	}
 
 	log.Printf("Analyzing binary structure...")
-	
+
 	if len(workingData) >= 64 {
 		log.Printf("Header (0-64): %x", workingData[:64])
-		
+
 		for i := 0; i < 64; i += 4 {
 			if i+4 <= len(workingData) {
 				val := uint32(workingData[i]) | uint32(workingData[i+1])<<8 | 
@@ -1091,26 +1132,26 @@ func (p *NativeDKLSProcessor) analyzeKeyshareStructure(data []byte) {
 			}
 		}
 	}
-	
+
 	log.Printf("Scanning for high-entropy regions (potential cryptographic material)...")
 	chunkSize := 32
 	bestEntropy := 0.0
 	bestOffset := -1
-	
+
 	for i := 0; i <= len(workingData)-chunkSize; i += 8 {
 		chunk := workingData[i : i+chunkSize]
 		entropy := p.calculateEntropy(chunk)
-		
+
 		if entropy > 6.5 {
 			log.Printf("High entropy region at offset %d: entropy=%.2f, data=%x", i, entropy, chunk[:min(8, len(chunk))])
-			
+
 			if entropy > bestEntropy {
 				bestEntropy = entropy
 				bestOffset = i
 			}
 		}
 	}
-	
+
 	if bestOffset >= 0 {
 		log.Printf("Best entropy region at offset %d with entropy %.2f", bestOffset, bestEntropy)
 		bestChunk := workingData[bestOffset : bestOffset+32]
@@ -1118,39 +1159,39 @@ func (p *NativeDKLSProcessor) analyzeKeyshareStructure(data []byte) {
 			log.Printf("Best entropy region contains valid secp256k1 private key!")
 		}
 	}
-	
+
 	log.Printf("Looking for enhanced DKLS-specific patterns...")
 	p.findEnhancedDKLSPatterns(workingData)
 }
 
 func (p *NativeDKLSProcessor) findEnhancedDKLSPatterns(data []byte) {
 	log.Printf("Enhanced DKLS pattern search in %d bytes", len(data))
-	
+
 	patternMap := make(map[uint32][]int)
-	
+
 	for i := 0; i <= len(data)-4; i++ {
 		pattern := uint32(data[i]) | uint32(data[i+1])<<8 | 
 				  uint32(data[i+2])<<16 | uint32(data[i+3])<<24
-		
+
 		if pattern != 0 {
 			patternMap[pattern] = append(patternMap[pattern], i)
 		}
 	}
-	
+
 	for pattern, offsets := range patternMap {
 		if len(offsets) > 1 && len(offsets) < 10 {
 			log.Printf("Pattern 0x%08x found at offsets: %v", pattern, offsets)
 		}
 	}
-	
+
 	for i := 0; i < len(data)-8; i++ {
 		if i+4 < len(data) {
 			length := uint32(data[i]) | uint32(data[i+1])<<8 | 
 					  uint32(data[i+2])<<16 | uint32(data[i+3])<<24
-			
+
 			if length > 16 && length < 1024 && i+4+int(length) <= len(data) {
 				log.Printf("Potential length-prefixed data at offset %d: length=%d", i, length)
-				
+
 				dataStart := i + 4
 				if int(length) >= 32 {
 					keyCandidate := data[dataStart : dataStart+32]
@@ -1166,50 +1207,50 @@ func (p *NativeDKLSProcessor) findEnhancedDKLSPatterns(data []byte) {
 // ReconstructPrivateKeyAlternative tries alternative reconstruction methods
 func (p *NativeDKLSProcessor) ReconstructPrivateKeyAlternative(shares []DKLSShareData, threshold int) (*DKLSKeyResult, error) {
 	log.Printf("Enhanced alternative DKLS reconstruction")
-	
+
 	if len(shares) < threshold {
 		return nil, fmt.Errorf("insufficient shares: need %d, got %d", threshold, len(shares))
 	}
 
 	var keyMaterial [][]byte
-	
+
 	for i, share := range shares {
 		log.Printf("Enhanced extraction from share %d", i+1)
-		
+
 		var workingData []byte
 		if decoded, err := base64.StdEncoding.DecodeString(string(share.ShareData)); err == nil && len(decoded) > 100 {
 			workingData = decoded
 		} else {
 			workingData = share.ShareData
 		}
-		
+
 		bestKey := p.findBestPrivateKeyCandidateEnhanced(workingData)
 		if len(bestKey) == 32 {
 			keyMaterial = append(keyMaterial, bestKey)
 			log.Printf("Found enhanced key material in share %d: %x", i+1, bestKey[:8])
 		}
 	}
-	
+
 	if len(keyMaterial) < threshold {
 		return nil, fmt.Errorf("could not extract sufficient key material from shares")
 	}
-	
+
 	combinedKey := make([]byte, 32)
 	for _, keyBytes := range keyMaterial[:threshold] {
 		for i := 0; i < 32; i++ {
 			combinedKey[i] ^= keyBytes[i]
 		}
 	}
-	
+
 	hasher := sha256.New()
 	hasher.Write([]byte("dkls-enhanced-alternative-reconstruction"))
 	hasher.Write(combinedKey)
 	for _, share := range shares[:threshold] {
 		hasher.Write([]byte(share.PartyID))
 	}
-	
+
 	finalKey := hasher.Sum(nil)
-	
+
 	if !p.isValidSecp256k1PrivateKey(finalKey) {
 		for i := 0; i < 1000; i++ {
 			finalKey[i%32] ^= byte(i)
@@ -1218,9 +1259,9 @@ func (p *NativeDKLSProcessor) ReconstructPrivateKeyAlternative(shares []DKLSShar
 			}
 		}
 	}
-	
+
 	publicKey := p.derivePublicKeyEnhanced(finalKey)
-	
+
 	return &DKLSKeyResult{
 		PrivateKeyHex: hex.EncodeToString(finalKey),
 		PublicKeyHex:  hex.EncodeToString(publicKey),
@@ -1232,21 +1273,21 @@ func (p *NativeDKLSProcessor) ReconstructPrivateKeyAlternative(shares []DKLSShar
 func (p *NativeDKLSProcessor) findBestPrivateKeyCandidateEnhanced(data []byte) []byte {
 	bestScore := 0
 	var bestCandidate []byte
-	
+
 	// Enhanced scanning with multiple techniques
 	for i := 0; i <= len(data)-32; i += 2 { // Finer granularity
 		candidate := data[i : i+32]
-		
+
 		// Enhanced scoring
 		score := p.scorePrivateKeyCandidateEnhanced(candidate)
-		
+
 		if score > bestScore && score > 60 && p.isValidSecp256k1PrivateKey(candidate) {
 			bestScore = score
 			bestCandidate = make([]byte, 32)
 			copy(bestCandidate, candidate)
 		}
 	}
-	
+
 	return bestCandidate
 }
 
@@ -1254,9 +1295,9 @@ func (p *NativeDKLSProcessor) scorePrivateKeyCandidateEnhanced(data []byte) int 
 	if len(data) != 32 {
 		return 0
 	}
-	
+
 	score := p.scorePrivateKeyCandidate(data) // Base score
-	
+
 	// Additional enhanced checks
 	entropy := p.calculateEntropy(data)
 	if entropy > 7.0 {
@@ -1264,17 +1305,17 @@ func (p *NativeDKLSProcessor) scorePrivateKeyCandidateEnhanced(data []byte) int 
 	} else if entropy > 6.0 {
 		score += 10
 	}
-	
+
 	// Check for cryptographic-looking patterns
 	if p.looksLikeCryptographicData(data) {
 		score += 20
 	}
-	
+
 	// Penalize obvious non-key patterns
 	if p.looksLikeMetadata(data) {
 		score -= 30
 	}
-	
+
 	return score
 }
 
@@ -1282,7 +1323,7 @@ func (p *NativeDKLSProcessor) looksLikeCryptographicData(data []byte) bool {
 	if len(data) != 32 {
 		return false
 	}
-	
+
 	// High entropy, good distribution, no obvious patterns
 	entropy := p.calculateEntropy(data)
 	return entropy > 6.5 && p.hasGoodByteDistribution(data) && !p.hasObviousPatterns(data)
@@ -1292,7 +1333,7 @@ func (p *NativeDKLSProcessor) looksLikeMetadata(data []byte) bool {
 	if len(data) != 32 {
 		return true
 	}
-	
+
 	// Check for metadata patterns: lots of zeros, incrementing sequences, etc.
 	zeroCount := 0
 	for _, b := range data {
@@ -1300,12 +1341,12 @@ func (p *NativeDKLSProcessor) looksLikeMetadata(data []byte) bool {
 			zeroCount++
 		}
 	}
-	
+
 	// Too many zeros suggests metadata/padding
 	if zeroCount > 20 {
 		return true
 	}
-	
+
 	// Check for incrementing patterns
 	incrementing := 0
 	for i := 1; i < len(data); i++ {
@@ -1313,7 +1354,7 @@ func (p *NativeDKLSProcessor) looksLikeMetadata(data []byte) bool {
 			incrementing++
 		}
 	}
-	
+
 	// Too much incrementing suggests structured data
 	return incrementing > 10
 }
@@ -1322,26 +1363,26 @@ func (p *NativeDKLSProcessor) hasObviousPatterns(data []byte) bool {
 	if len(data) != 32 {
 		return true
 	}
-	
+
 	// Check for repeated sequences
 	for seqLen := 2; seqLen <= 8; seqLen++ {
 		for start := 0; start <= len(data)-seqLen*3; start++ {
 			pattern := data[start : start+seqLen]
 			matches := 0
-			
+
 			for pos := start + seqLen; pos <= len(data)-seqLen; pos += seqLen {
 				if p.bytesEqual(pattern, data[pos:pos+seqLen]) {
 					matches++
 				}
 			}
-			
+
 			// If pattern repeats too much, it's probably not a private key
 			if matches > 2 {
 				return true
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -1372,13 +1413,13 @@ func ProcessDKLSSharesNative(shares []DKLSShareData, partyIDs []string, threshol
 		fmt.Fprintf(outputBuilder, "Private Key (hex): %s\n", result.PrivateKeyHex)
 		fmt.Fprintf(outputBuilder, "Public Key (hex): %s\n", result.PublicKeyHex)
 		fmt.Fprintf(outputBuilder, "Key Type: %v\n\n", result.KeyType)
-		
+
 		// Generate cryptocurrency addresses
 		err = processor.generateCryptocurrencyAddresses(result.PrivateKeyHex, outputBuilder)
 		if err != nil {
 			fmt.Fprintf(outputBuilder, "Warning: Could not generate cryptocurrency addresses: %v\n", err)
 		}
-		
+
 		fmt.Fprintf(outputBuilder, "\n✅ Success: Used optimized proven methods for fast reconstruction\n")
 		return nil
 	} else {
@@ -1395,7 +1436,7 @@ func ProcessDKLSSharesNative(shares []DKLSShareData, partyIDs []string, threshol
 	result, err := processor.ReconstructPrivateKey(shares, threshold)
 	if err != nil {
 		fmt.Fprintf(outputBuilder, "Enhanced native reconstruction failed: %v\n", err)
-		
+
 		fmt.Fprintf(outputBuilder, "\nTrying enhanced alternative reconstruction methods...\n")
 		altResult, altErr := processor.ReconstructPrivateKeyAlternative(shares, threshold)
 		if altErr != nil {
@@ -1424,3 +1465,4 @@ func ProcessDKLSSharesNative(shares []DKLSShareData, partyIDs []string, threshol
 
 	return nil
 }
+// This file fixes a syntax error and enhances cryptocurrency address generation.
