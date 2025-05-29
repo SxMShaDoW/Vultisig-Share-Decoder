@@ -57,7 +57,7 @@ make cli && ./dist/cli test-address --private-key <hex_private_key> --chaincode 
 
 Example:
 ```bash
-make cli && ./dist/cli test-address --private-key 2abbfad6ea48607d9665e123456789bed21204cfe479fdec40d33058c0a4e3feb
+make cli && ./dist/cli test-address --private-key 2abbfad6ea48607d9665e123456789bed21204cfe479fdec40d33058c0a4e3fe --chaincode e2f8c4826d6d23407cff45498b940f52756c3056fa1bcba0cb7f6bafc2478eac
 ```
 
 ## Test Files Included
