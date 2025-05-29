@@ -288,9 +288,16 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
                 debugLog(`Successfully created keyshare ${i + 1}`);
 
                 // Get the key ID for this keyshare
-                const keyId = keyshare.keyId();
-                if (!keyId) {
-                    throw new Error(`Failed to get key ID for keyshare ${i + 1}`);
+                let keyId;
+                try {
+                    keyId = keyshare.keyId();
+                    if (!keyId) {
+                        throw new Error(`keyId() returned null/undefined`);
+                    }
+                    debugLog(`Raw keyId type: ${typeof keyId}, value: ${keyId}`);
+                } catch (keyIdError) {
+                    debugLog(`Error getting keyId: ${keyIdError.message}`);
+                    throw new Error(`Failed to get key ID for keyshare ${i + 1}: ${keyIdError.message}`);
                 }
 
                 // Convert keyId to string
@@ -322,22 +329,43 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         const firstKeyId = keyIds[0];
         for (let i = 1; i < keyIds.length; i++) {
             if (keyIds[i] !== firstKeyId) {
-                debugLog(`Warning: Key ID mismatch - Share 1: ${firstKeyId}, Share ${i + 1}: ${keyIds[i]}`);
-                // Continue anyway as some implementations might have slight variations
+                debugLog(`Key ID mismatch - Share 1: ${firstKeyId}, Share ${i + 1}: ${keyIds[i]}`);
             }
         }
 
         debugLog("Creating KeyExportSession...");
+        debugLog(`Using key IDs: ${keyIds.join(', ')}`);
 
-        // Create the export session with the first keyshare and all unique key IDs
-        const uniqueKeyIds = [...new Set(keyIds)]; // Remove duplicates
-        const session = KeyExportSession.new(keyshares[0], uniqueKeyIds);
-        if (!session) {
-            throw new Error("Failed to create KeyExportSession");
+        // Create the export session with the first keyshare and all party IDs as strings
+        // Use simple string party IDs instead of trying to use hex key IDs
+        const partyIds = keyshares.map((_, index) => `party${index + 1}`);
+        debugLog(`Using party IDs: ${partyIds.join(', ')}`);
+        
+        let session;
+        try {
+            debugLog("Creating session with first keyshare and party IDs...");
+            session = KeyExportSession.new(keyshares[0], partyIds);
+            if (!session) {
+                throw new Error("KeyExportSession.new returned null/undefined");
+            }
+            debugLog("Session created successfully");
+        } catch (sessionError) {
+            debugLog(`Session creation failed: ${sessionError.message}`);
+            throw new Error(`Failed to create KeyExportSession: ${sessionError.message}`);
         }
 
         debugLog("Getting setup message...");
-        const setupMessage = session.setup;
+        let setupMessage;
+        try {
+            setupMessage = session.setup;
+            if (!setupMessage) {
+                throw new Error("setup property returned null/undefined");
+            }
+            debugLog(`Setup message obtained, length: ${setupMessage.length} bytes`);
+        } catch (setupError) {
+            debugLog(`Setup message retrieval failed: ${setupError.message}`);
+            throw new Error(`Failed to get setup message: ${setupError.message}`);
+        }
         if (!setupMessage) {
             throw new Error("Failed to get setup message");
         }
@@ -347,11 +375,22 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         // Process remaining keyshares to extract encrypted material
         debugLog("Processing remaining keyshares...");
         for (let i = 1; i < keyshares.length; i++) {
-            debugLog(`Processing keyshare ${i + 1}...`);
+            debugLog(`Processing keyshare ${i + 1} with party ID: ${partyIds[i]}...`);
             
             try {
-                // Export the encrypted material from this keyshare
-                const message = KeyExportSession.exportShare(setupMessage, keyIds[i], keyshares[i]);
+                // Export the encrypted material from this keyshare using party ID
+                debugLog(`Calling exportShare with setup length: ${setupMessage.length}, party ID: "${partyIds[i]}", keyshare type: ${typeof keyshares[i]}`);
+                
+                let message;
+                try {
+                    message = KeyExportSession.exportShare(setupMessage, partyIds[i], keyshares[i]);
+                    debugLog(`exportShare call completed for keyshare ${i + 1}`);
+                } catch (exportError) {
+                    debugLog(`exportShare call failed: ${exportError.message}`);
+                    debugLog(`Error type: ${exportError.constructor.name}`);
+                    debugLog(`Error stack: ${exportError.stack}`);
+                    throw exportError;
+                }
 
                 if (!message) {
                     throw new Error(`exportShare returned null for keyshare ${i + 1}`);
