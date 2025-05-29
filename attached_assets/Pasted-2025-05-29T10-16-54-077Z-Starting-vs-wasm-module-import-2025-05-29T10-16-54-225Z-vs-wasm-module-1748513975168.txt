@@ -1,0 +1,33 @@
+2025-05-29T10:16:54.077Z: Starting vs_wasm module import...
+2025-05-29T10:16:54.225Z: vs_wasm module imported successfully
+2025-05-29T10:16:54.225Z: Initializing WASM binary...
+2025-05-29T10:16:54.659Z: vs_wasm WASM binary initialized successfully
+2025-05-29T10:16:54.659Z: vs_wasm classes configured successfully
+2025-05-29T10:16:54.659Z: Available classes: Keyshare, KeyExportSession, Message
+2025-05-29T10:16:57.891Z: Main WASM initialized successfully
+2025-05-29T10:16:57.891Z: Main WASM module initialized successfully
+2025-05-29T10:16:57.891Z: vs_wasm module initialized successfully
+2025-05-29T10:16:57.891Z: Application initialization complete
+2025-05-29T10:16:57.891Z: UI initialized and ready
+2025-05-29T10:17:03.152Z: Added new file input group 2
+2025-05-29T10:17:06.147Z: Selected scheme: dkls
+2025-05-29T10:17:06.147Z: Processing with DKLS scheme using WASM library...
+2025-05-29T10:17:06.147Z: Starting DKLS processing with vs_wasm...
+2025-05-29T10:17:06.147Z: Processing 2 DKLS files...
+2025-05-29T10:17:06.147Z: Processing file 1: Test Fast Vault DKLS-8d9b-share1of2-nopass.vult
+2025-05-29T10:17:06.147Z: File size: 157476 bytes
+2025-05-29T10:17:06.147Z: First 32 bytes: 43 41 45 53 31 4a 6f 48 51 32 68 53 56 56 70 59 54 6a 42 4a 52 56 70 6f 59 7a 4e 52 5a 31 5a 74
+2025-05-29T10:17:06.148Z: Parsing vault file 1 to extract keyshare...
+2025-05-29T10:17:06.152Z: Successfully decoded base64 vault data
+2025-05-29T10:17:06.152Z: Successfully parsed VaultContainer
+2025-05-29T10:17:06.155Z: Successfully decoded vault from VaultContainer
+2025-05-29T10:17:06.155Z: Found keyshares field, length: 88032
+2025-05-29T10:17:06.155Z: Invalid keyshare length or offset
+2025-05-29T10:17:06.156Z: Using fallback keyshare detection
+2025-05-29T10:17:06.156Z: New best keyshare candidate, score: 10, length: 88032
+2025-05-29T10:17:06.156Z: Extracted keyshare data, length: 88032 bytes
+2025-05-29T10:17:06.156Z: Attempting to create Keyshare from extracted data for file 1...
+2025-05-29T10:17:06.156Z: Error creating keyshare from file 1: Keyshare decode error
+2025-05-29T10:17:06.156Z: DKLS processing error: Failed to create keyshare from file Test Fast Vault DKLS-8d9b-share1of2-nopass.vult: Keyshare decode error
+2025-05-29T10:17:06.156Z: Error in results: Error: DKLS processing failed: Failed to create keyshare from file Test Fast Vault DKLS-8d9b-share1of2-nopass.vult: Keyshare decode error
+2025-05-29T10:17:06.156Z: Error in recoverKeys: DKLS processing failed: Failed to create keyshare from file Test Fast Vault DKLS-8d9b-share1of2-nopass.vult: Keyshare decode error
