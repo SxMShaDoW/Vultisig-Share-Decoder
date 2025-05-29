@@ -110,106 +110,17 @@ func ProcessECDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBu
     extendedPrivateKey := hdkeychain.NewExtendedKey(net.HDPrivateKeyID[:], privateKey.Serialize(), chaincodeBuf, []byte{0x00, 0x00, 0x00, 0x00}, 0, 0, true)
     fmt.Fprintf(outputBuilder, "\nextended private key full: %s\n", extendedPrivateKey.String())
 
-    supportedCoins := []struct {
-        name       string
-        derivePath string
-        action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
-    }{
-        {
-            name:       "bitcoin",
-            derivePath: "m/84'/0'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.ShowBitcoinKey(key, output)
-            },
-        },
-        {
-            name:       "bitcoinCash",
-            derivePath: "m/44'/145'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.ShowBitcoinCashKey(key, output)
-            },
-        },
-        {
-            name:       "dogecoin",
-            derivePath: "m/44'/3'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.ShowDogecoinKey(key, output)
-            },
-        },
-        {
-            name:       "litecoin",
-            derivePath: "m/84'/2'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.ShowLitecoinKey(key, output)
-            },
-        },
-        {
-            name:       "thorchain",
-            derivePath: "m/44'/931'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.CosmosLikeKeyHandler(key, "thor", "v", "c", output, "THORChain")
-            },
-        },
-        {
-            name:       "mayachain",
-            derivePath: "m/44'/931'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.CosmosLikeKeyHandler(key, "maya", "v", "c", output, "MayaChain")
-            },
-        },
-        {
-            name:       "atomchain",
-            derivePath: "m/44'/118'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.CosmosLikeKeyHandler(key, "cosmos", "valoper", "valcons", output, "ATOMChain")
-            },
-        },
-        {
-            name:       "kujirachain",
-            derivePath: "m/44'/118'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.CosmosLikeKeyHandler(key, "kujira", "valoper", "valcons", output, "KujiraChain")
-            },
-        },
-        {
-            name:       "dydxchain",
-            derivePath: "m/44'/118'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.CosmosLikeKeyHandler(key, "dydx", "valoper", "valcons", output, "DydxChain")
-            },
-        },
-        {
-            name:       "terraclassicchain",
-            derivePath: "m/44'/118'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.CosmosLikeKeyHandler(key, "terra", "valoper", "valcons", output, "terraclassicchain")
-            },
-        },
-        {
-            name:       "terrachain",
-            derivePath: "m/44'/118'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.CosmosLikeKeyHandler(key, "terra", "valoper", "valcons", output, "terrachain")
-            },
-        },
-        {
-            name:       "ethereum",
-            derivePath: "m/44'/60'/0'/0/0",
-            action: func(key *hdkeychain.ExtendedKey, output *strings.Builder) error {
-                return keyhandlers.ShowEthereumKey(key, output)
-            },
-        },
-    }
+    supportedCoins := keyhandlers.GetSupportedCoins()
 
     for _, coin := range supportedCoins {
-        fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.name)
-        key, err := keyhandlers.GetDerivedPrivateKeys(coin.derivePath, extendedPrivateKey)
+        fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.Name)
+        key, err := keyhandlers.GetDerivedPrivateKeys(coin.DerivePath, extendedPrivateKey)
         if err != nil {
-            return fmt.Errorf("error deriving private key for %s: %w", coin.name, err)
+            return fmt.Errorf("error deriving private key for %s: %w", coin.Name, err)
         }
-        fmt.Fprintf(outputBuilder, "\nprivate key for %s: %s \n", coin.name, key.String())
-        if err := coin.action(key, outputBuilder); err != nil {
-            fmt.Println("error showing keys for", coin.name, "error:", err)
+        fmt.Fprintf(outputBuilder, "\nprivate key for %s: %s \n", coin.Name, key.String())
+        if err := coin.Action(key, outputBuilder); err != nil {
+            fmt.Println("error showing keys for", coin.Name, "error:", err)
         }
     }
 

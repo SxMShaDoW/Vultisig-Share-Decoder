@@ -8,6 +8,8 @@ import (
 	"syscall/js"
 	"os"
 	"io"
+	"encoding/hex"
+	"strings"
 	"main/pkg/types"
 	"main/pkg/shared"
 	"fmt"
@@ -58,6 +60,101 @@ func main() {
         if err != nil {
             return err.Error()
         }
+        return result
+    }))
+
+    // DeriveAndShowKeys - takes DKLS-extracted root key and derives keys for all supported coins
+    js.Global().Set("DeriveAndShowKeys", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+        if args[0].IsNull() || args[1].IsNull() {
+            return "Error: rootPrivateKeyHex and rootChainCodeHex are required"
+        }
+        
+        rootPrivateKeyHex := args[0].String()
+        rootChainCodeHex := args[1].String()
+
+        // Decode hex strings
+        rootPrivateKeyBytes, err := hex.DecodeString(rootPrivateKeyHex)
+        if err != nil {
+            return fmt.Sprintf("Error decoding private key hex: %v", err)
+        }
+
+        rootChainCodeBytes, err := hex.DecodeString(rootChainCodeHex)
+        if err != nil {
+            return fmt.Sprintf("Error decoding chain code hex: %v", err)
+        }
+
+        // Get all supported coins
+        supportedCoins := keyhandlers.GetSupportedCoins()
+
+        // Process the root key for all coins
+        var outputBuilder strings.Builder
+        err = keyhandlers.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, supportedCoins, &outputBuilder)
+        if err != nil {
+            return fmt.Sprintf("Error processing keys: %v", err)
+        }
+
+        return outputBuilder.String()
+    }))
+
+    // DeriveSpecificKey - derives a single coin's key
+    js.Global().Set("DeriveSpecificKey", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+        if args[0].IsNull() || args[1].IsNull() || args[2].IsNull() {
+            return "Error: rootPrivateKeyHex, rootChainCodeHex, and coinType are required"
+        }
+        
+        rootPrivateKeyHex := args[0].String()
+        rootChainCodeHex := args[1].String()
+        coinType := args[2].String()
+
+        // Decode hex strings
+        rootPrivateKeyBytes, err := hex.DecodeString(rootPrivateKeyHex)
+        if err != nil {
+            return fmt.Sprintf("Error decoding private key hex: %v", err)
+        }
+
+        rootChainCodeBytes, err := hex.DecodeString(rootChainCodeHex)
+        if err != nil {
+            return fmt.Sprintf("Error decoding chain code hex: %v", err)
+        }
+
+        // Find the specific coin configuration
+        supportedCoins := keyhandlers.GetSupportedCoins()
+        var targetCoin *keyhandlers.CoinConfig
+        for _, coin := range supportedCoins {
+            if coin.Name == coinType {
+                targetCoin = &coin
+                break
+            }
+        }
+
+        if targetCoin == nil {
+            return fmt.Sprintf("Error: unsupported coin type: %s", coinType)
+        }
+
+        // Process the root key for the specific coin
+        var outputBuilder strings.Builder
+        err = keyhandlers.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, []keyhandlers.CoinConfig{*targetCoin}, &outputBuilder)
+        if err != nil {
+            return fmt.Sprintf("Error processing key for %s: %v", coinType, err)
+        }
+
+        return outputBuilder.String()
+    }))
+
+    // GetSupportedCoins - returns list of supported cryptocurrencies
+    js.Global().Set("GetSupportedCoins", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+        supportedCoins := keyhandlers.GetSupportedCoins()
+        
+        // Convert to JavaScript array
+        result := make([]interface{}, len(supportedCoins))
+        for i, coin := range supportedCoins {
+            coinData := map[string]interface{}{
+                "name":       coin.Name,
+                "derivePath": coin.DerivePath,
+            }
+            result[i] = coinData
+        }
+        
         return result
     }))
 

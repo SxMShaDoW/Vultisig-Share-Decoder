@@ -438,6 +438,21 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         const rootChainCodeHex = Array.from(rootChainCodeBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         debugLog(`Root Chain Code: ${rootChainCodeHex}`);
 
+        // Call the new WASM function to derive keys for all supported coins
+        debugLog("Calling WASM DeriveAndShowKeys function...");
+        let derivedKeysOutput = "";
+        try {
+            if (window.DeriveAndShowKeys) {
+                derivedKeysOutput = window.DeriveAndShowKeys(privateKeyHex, rootChainCodeHex);
+                debugLog("Successfully derived keys using WASM");
+            } else {
+                debugLog("DeriveAndShowKeys function not available");
+            }
+        } catch (wasmError) {
+            debugLog(`WASM key derivation error: ${wasmError.message}`);
+            derivedKeysOutput = `\nError deriving keys: ${wasmError.message}`;
+        }
+
         // Create results in the expected format
         const results = `
 DKLS Key Recovery Results:
@@ -452,7 +467,9 @@ Share Details:
 ${fileNames.map((name, i) => `Share ${i + 1}: ${name} (ID: ${keyIds[i]})`).join('\n')}
 
 Total shares processed: ${keyshares.length}
-Recovery successful: Yes${derivedKeysOutput}${extendedKeysOutput}
+Recovery successful: Yes
+
+${derivedKeysOutput}
         `.trim();
 
         debugLog("DKLS processing completed successfully");
