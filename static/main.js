@@ -157,23 +157,30 @@ async function parseAndDecryptVault(fileData, password) {
             throw new Error("Could not parse file as VaultContainer");
         }
 
-        // Step 3: Check if vault is encrypted
-        if (!vaultContainer.isEncrypted) {
-            throw new Error("Vault is not encrypted - this shouldn't happen for .vult files");
-        }
-
-        // Step 4: Decrypt the vault using password
+        // Step 3: Handle both encrypted and unencrypted vaults
         let vaultData;
-        try {
-            const encryptedVaultBytes = fromBase64(vaultContainer.vault);
-            vaultData = await decryptWithAesGcm({
-                key: password,
-                value: encryptedVaultBytes
-            });
-            debugLog(`Successfully decrypted vault, ${vaultData.length} bytes`);
-        } catch (error) {
-            debugLog(`Decryption failed: ${error.message}`);
-            throw new Error(`Failed to decrypt vault: ${error.message}`);
+        if (vaultContainer.isEncrypted) {
+            // Step 4a: Decrypt the vault using password
+            try {
+                const encryptedVaultBytes = fromBase64(vaultContainer.vault);
+                vaultData = await decryptWithAesGcm({
+                    key: password,
+                    value: encryptedVaultBytes
+                });
+                debugLog(`Successfully decrypted vault, ${vaultData.length} bytes`);
+            } catch (error) {
+                debugLog(`Decryption failed: ${error.message}`);
+                throw new Error(`Failed to decrypt vault: ${error.message}`);
+            }
+        } else {
+            // Step 4b: Use vault data directly (unencrypted)
+            try {
+                vaultData = fromBase64(vaultContainer.vault);
+                debugLog(`Using unencrypted vault data, ${vaultData.length} bytes`);
+            } catch (error) {
+                debugLog(`Failed to decode unencrypted vault: ${error.message}`);
+                throw new Error(`Failed to decode unencrypted vault: ${error.message}`);
+            }
         }
 
         // Step 5: Parse the vault protobuf to extract keyshare
