@@ -1723,7 +1723,7 @@ func ProcessDKLSSharesNative(shares []DKLSShareData, partyIDs []string, threshol
 	var fileInfos []types.FileInfo
 	var passwords []string
 
-	for _, share := range shares {
+	for i, share := range shares {
 		fileInfos = append(fileInfos, types.FileInfo{
 			Name:    fmt.Sprintf("share_%s", share.PartyID),
 			Content: share.ShareData,
