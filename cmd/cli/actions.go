@@ -17,6 +17,7 @@ import (
 	"main/pkg/encryption"
 	"main/pkg/keyprocessing"
 	"main/pkg/shared"
+	"main/pkg/dkls"
 )
 
 func ProcessFiles(files []string, passwords []string, source types.InputSource) (string, error) {
@@ -251,4 +252,56 @@ func ProcessGG20Files(fileInfos []types.FileInfo, passwords []string, source typ
 	}
 
 	return outputBuilder.String(), nil
+}
+
+func TestAddressAction(c *cli.Context) error {
+	privateKeyHex := c.String("private-key")
+
+	fmt.Printf("Testing address generation for private key: %s\n\n", privateKeyHex)
+
+	// Get the address generator
+	generator := dkls.GetAddressGenerator()
+
+	// Validate the private key first
+	if !generator.ValidatePrivateKey(privateKeyHex) {
+		return fmt.Errorf("invalid private key: not a valid secp256k1 private key")
+	}
+
+	fmt.Println("✅ Private key is valid for secp256k1")
+
+	// Generate Bitcoin address
+	fmt.Println("\n=== Bitcoin ===")
+	btcAddr, wif, err := generator.GenerateBitcoinAddress(privateKeyHex)
+	if err != nil {
+		fmt.Printf("Error generating Bitcoin address: %v\n", err)
+	} else {
+		fmt.Printf("Address (P2WPKH): %s\n", btcAddr)
+		fmt.Printf("WIF Private Key: %s\n", wif)
+	}
+
+	// Generate Ethereum address
+	fmt.Println("\n=== Ethereum ===")
+	ethAddr, err := generator.GenerateEthereumAddress(privateKeyHex)
+	if err != nil {
+		fmt.Printf("Error generating Ethereum address: %v\n", err)
+	} else {
+		fmt.Printf("Address: %s\n", ethAddr)
+	}
+
+	// Generate all supported addresses
+	fmt.Println("\n=== All Supported Cryptocurrencies ===")
+	addresses, err := generator.GenerateMultiCoinAddresses(privateKeyHex)
+	if err != nil {
+		fmt.Printf("Error generating multi-coin addresses: %v\n", err)
+	} else {
+		for coin, info := range addresses {
+			fmt.Printf("\n%s:\n", strings.ToUpper(coin))
+			fmt.Printf("  Address: %s\n", info.Address)
+			if info.WIF != "" {
+				fmt.Printf("  WIF: %s\n", info.WIF)
+			}
+		}
+	}
+
+	return nil
 }

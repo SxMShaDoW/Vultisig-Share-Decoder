@@ -36,6 +36,18 @@ func main() {
                 },
                 Action: RecoverAction,
             },
+            {
+                Name: "test-address",
+                Flags: []cli.Flag{
+                    &cli.StringFlag{
+                        Name:     "private-key",
+                        Usage:    "private key in hex format",
+                        Required: true,
+                    },
+                },
+                Action: TestAddressAction,
+                Usage:  "test address generation from private key",
+            },
         },
     }
     if err := app.Run(os.Args); err != nil {
