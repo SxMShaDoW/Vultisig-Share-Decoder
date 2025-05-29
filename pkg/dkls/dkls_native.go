@@ -1259,9 +1259,6 @@ func (p *NativeDKLSProcessor) scorePrivateKeyCandidate(data []byte) int {
 	if data[31] != 0 {
 		score += 5
 	}
-	if p.isValidSecp256k1PrivateKey(data) {
-		score += 50
-	}
 	if data[0] == data[1] && data[1] == data[2] {
 		score -= 10
 	}
@@ -1501,15 +1498,15 @@ func (p *NativeDKLSProcessor) findEnhancedDKLSPatterns(data []byte) {
 		}
 	}
 
-	for offset := 0; offset < len(data)-8; offset++ {
-		if offset+4 < len(data) {
-			length := uint32(data[offset]) | uint32(data[offset+1])<<8 | 
-					  uint32(data[offset+2])<<16 | uint32(data[offset+3])<<24
+	for j := 0; j < len(data)-8; j++ {
+		if j+4 < len(data) {
+			length := uint32(data[j]) | uint32(data[j+1])<<8 | 
+					  uint32(data[j+2])<<16 | uint32(data[j+3])<<24
 
-			if length > 16 && length < 1024 && offset+4+int(length) <= len(data) {
-				log.Printf("Potential length-prefixed data at offset %d: length=%d", offset, length)
+			if length > 16 && length < 1024 && j+4+int(length) <= len(data) {
+				log.Printf("Potential length-prefixed data at offset %d: length=%d", j, length)
 
-				dataStart := offset + 4
+				dataStart := j + 4
 				if int(length) >= 32 {
 					keyCandidate := data[dataStart : dataStart+32]
 					if p.scorePrivateKeyCandidate(keyCandidate) > 50 {
