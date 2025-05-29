@@ -6,8 +6,22 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
+	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	"github.com/cosmos/cosmos-sdk/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/gcash/bchd/bchec"
+	bchChainCfg "github.com/gcash/bchd/chaincfg"
+	"github.com/gcash/bchutil"
+	dogec "github.com/eager7/dogd/btcec"
+	dogechaincfg "github.com/eager7/dogd/chaincfg"
+	"github.com/eager7/dogutil"
+	"github.com/ltcsuite/ltcd/ltcutil"
+	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
+	"main/tss"
 )
 
 // DeriveKeysFromPrivateKey derives cryptocurrency keys from a private key and root chain code
@@ -201,32 +215,6 @@ func ShowExtendedKeys(privateKeyHex, rootChainCodeHex string) (string, error) {
 	
 	return output.String(), nil
 }
-
-package keyhandlers
-
-import (
-  "encoding/hex"
-  "fmt"
-  "strings"
-
-  "github.com/btcsuite/btcd/btcutil"
-  "github.com/btcsuite/btcd/chaincfg"
-  "github.com/btcsuite/btcd/btcutil/hdkeychain"
-  coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
-  "github.com/cosmos/cosmos-sdk/types"
-  sdk "github.com/cosmos/cosmos-sdk/types"
-  "github.com/ethereum/go-ethereum/crypto"
-  "github.com/gcash/bchd/bchec"
-  bchChainCfg "github.com/gcash/bchd/chaincfg"
-  "github.com/gcash/bchutil"
-  dogec "github.com/eager7/dogd/btcec"
-  dogechaincfg "github.com/eager7/dogd/chaincfg"
-  "github.com/eager7/dogutil"
-  "github.com/ltcsuite/ltcd/ltcutil"
-  ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
-  //"github.com/vultisig/mobile-tss-lib/tss"
-  "main/tss"
-)
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
   pathBuf, err := tss.GetDerivePathBytes(derivePath)
