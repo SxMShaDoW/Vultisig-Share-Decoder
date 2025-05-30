@@ -305,7 +305,8 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
                     name: vault.name || fileNames[i],
                     localPartyId: vault.localPartyId || `party${i + 1}`,
                     resharePrefix: vault.resharePrefix || '',
-                    filename: fileNames[i]
+                    filename: fileNames[i],
+                    publicKeyEddsa: vault.publicKeyEddsa || ''
                 });
 
                 // Parse and decrypt vault container for keyshare data
@@ -469,6 +470,14 @@ async function processDKLSWithWASM(files, passwords, fileNames) {
         const publicKeyBytes = keyshares[0].publicKey();
         const publicKeyHex = Array.from(publicKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
+        debugLog("Getting EdDSA public key from vault...");
+        const eddsaPublicKey = vaultInfos[0] ? vaultInfos.find(v => v.publicKeyEddsa)?.publicKeyEddsa || '' : '';
+        if (eddsaPublicKey) {
+            debugLog(`EdDSA Public Key: ${eddsaPublicKey}`);
+        } else {
+            debugLog("No EdDSA public key found in vault");
+        }
+
         debugLog("Getting root chain code...");
         const rootChainCodeBytes = keyshares[0].rootChainCode();
         const rootChainCodeHex = Array.from(rootChainCodeBytes).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -501,8 +510,7 @@ All Shares: [${allPartyIds.join(' ')}]`;
         }).join('\n\n')}
 
 Public Key(ECDSA): ${publicKeyHex}
-
-Public Key(ECDSA): ${publicKeyHex}
+${eddsaPublicKey ? `Public Key(EdDSA): ${eddsaPublicKey}` : ''}
 
 ${derivedKeysOutput}
         `.trim();
