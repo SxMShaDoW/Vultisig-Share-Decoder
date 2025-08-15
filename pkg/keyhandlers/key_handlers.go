@@ -23,6 +23,7 @@ import (
 	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
 	"main/tss"
 	"github.com/btcsuite/btcutil/base58"
+	"golang.org/x/crypto/blake2b"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -318,6 +319,33 @@ func ShowSolanaKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []b
 	return nil
 }
 
+// ShowSuiKeyFromEdDSA shows Sui key information from raw Ed25519 keys
+func ShowSuiKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
+	// For Sui, we need to create an address from the public key using Blake2b hashing
+	// Sui address = Blake2b(scheme_flag || public_key)[0:20]
+	// where scheme_flag = 0x00 for Ed25519
+	
+	// Create the input for hashing: scheme flag (0x00 for Ed25519) + public key
+	input := make([]byte, 1+len(eddsaPublicKeyBytes))
+	input[0] = 0x00 // Ed25519 scheme flag
+	copy(input[1:], eddsaPublicKeyBytes)
+	
+	// Hash using Blake2b
+	hash := blake2b.Sum256(input)
+	
+	// Take first 20 bytes for address
+	addressBytes := hash[:20]
+	
+	// Convert to hex with 0x prefix for Sui address format
+	suiAddress := "0x" + hex.EncodeToString(addressBytes)
+
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for sui:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for sui:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nsui address:%s\n", suiAddress)
+
+	return nil
+}
+
 // GetEdDSACoins returns coins that use EdDSA
 func GetEdDSACoins() []CoinConfigEdDSA {
 	return []CoinConfigEdDSA{
@@ -325,6 +353,11 @@ func GetEdDSACoins() []CoinConfigEdDSA {
 			Name:       "solana",
 			DerivePath: "m/44'/501'/0'/0'",
 			Action:     ShowSolanaKeyFromEdDSA,
+		},
+		{
+			Name:       "sui",
+			DerivePath: "m/44'/784'/0'/0'/0'",
+			Action:     ShowSuiKeyFromEdDSA,
 		},
 	}
 }
