@@ -294,37 +294,6 @@ func ProcessRootKeyForCoins(rootPrivateKeyBytes []byte, rootChainCodeBytes []byt
 
 
 
-func ShowSolanaKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-	fmt.Fprintf(outputBuilder, "\nnon-hardened extended private key for solana:%s\n", extendedPrivateKey.String())
-	
-	nonHardenedPrivKey, err := extendedPrivateKey.ECPrivKey()
-	if err != nil {
-		return err
-	}
-
-	// For ECDSA-derived Solana keys, we use the secp256k1 key bytes as seed
-	privateKeyBytes := nonHardenedPrivKey.Serialize()
-	
-	// Use the first 32 bytes as Ed25519 seed
-	if len(privateKeyBytes) > 32 {
-		privateKeyBytes = privateKeyBytes[:32]
-	}
-	
-	// Create Ed25519 key pair from seed
-	privateKeyBigInt := new(big.Int).SetBytes(privateKeyBytes)
-	edPrivateKey := edwards.NewPrivateKey(privateKeyBigInt)
-	edPublicKey := edPrivateKey.PubKey()
-	
-	publicKeyBytes := edPublicKey.Serialize()
-	solanaAddress := base58.Encode(publicKeyBytes)
-	
-	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for solana:%s\n", hex.EncodeToString(edPrivateKey.Serialize()))
-	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for solana:%s\n", hex.EncodeToString(publicKeyBytes))
-	fmt.Fprintf(outputBuilder, "\nsolana address:%s\n", solanaAddress)
-	
-	return nil
-}
-
 // ShowSolanaKeyFromEdDSA shows Solana key information from raw Ed25519 keys
 func ShowSolanaKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
 	// For Solana, the Ed25519 public key IS the address
@@ -349,15 +318,7 @@ func ProcessEdDSAKeyForCoins(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []
 	
 	// Process each EdDSA coin configuration
 	for _, coin := range coinConfigs {
-		fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.Name)
-		
-		// For Solana, use the actual EdDSA keys directly
-		if coin.Name == "solana" {
-			fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for solana:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
-			fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for solana:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
-			fmt.Fprintf(outputBuilder, "\nsolana address:%s\n", solanaAddress)
-		}
-	}
+		fmt.Fprintf(outputBuilder, "\nRecovering EDDSA %s key....\n", coin.Name)
 	
 	return nil
 }
@@ -368,7 +329,7 @@ func GetEdDSACoins() []CoinConfig {
 		{
 			Name:       "solana",
 			DerivePath: "m/44'/501'/0'/0'",
-			Action:     ShowSolanaKey,
+			Action:     ShowSolanaKeyFromEdDSA,
 		},
 	}
 }
