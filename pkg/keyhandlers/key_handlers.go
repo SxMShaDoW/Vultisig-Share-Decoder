@@ -341,30 +341,17 @@ func ShowSolanaKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []b
 
 // ProcessEdDSAKeyForCoins processes EdDSA key material for EdDSA-based coins
 func ProcessEdDSAKeyForCoins(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, coinConfigs []CoinConfig, outputBuilder *strings.Builder) error {
-	// Import the key_processing package to use its working ProcessEdDSAKeys function
-	// We need to create a mock LocalState structure that ProcessEdDSAKeys expects
-	
-	// Create a mock VSS share structure using the raw EdDSA keys
-	eddsaPrivateKey64 := append(eddsaPrivateKeyBytes, eddsaPublicKeyBytes...)
+	// The EdDSA keys passed here are the actual reconstructed EdDSA root keys
+	// Use them directly for Solana address generation
 	
 	// For Solana, the Ed25519 public key IS the address
 	solanaAddress := base58.Encode(eddsaPublicKeyBytes)
-	
-	// Display EdDSA key information in the same format as ProcessEdDSAKeys
-	fmt.Fprintf(outputBuilder, "\naddress base58:%s\n", solanaAddress)
-	fmt.Fprintf(outputBuilder, "\nhex encoded root pubkey(EdDSA): %s\n", hex.EncodeToString(eddsaPublicKeyBytes))
-	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey 32 bit(EdDSA): %s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
-	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey 64 bit(EdDSA): %s\n", hex.EncodeToString(eddsaPrivateKey64))
-	
-	// Base58 encodings
-	privateKeyBase58 := base58.Encode(eddsaPrivateKey64)
-	fmt.Fprintf(outputBuilder, "\nhex encoded root privkey 64 bit base58(EdDSA): %s\n", privateKeyBase58)
 	
 	// Process each EdDSA coin configuration
 	for _, coin := range coinConfigs {
 		fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.Name)
 		
-		// For Solana, directly output the address since we already have the Ed25519 public key
+		// For Solana, use the actual EdDSA keys directly
 		if coin.Name == "solana" {
 			fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for solana:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 			fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for solana:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
