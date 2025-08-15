@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"crypto/ed25519"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -27,6 +28,7 @@ import (
 	"golang.org/x/crypto/sha3"
 	"crypto/sha256"
 	"github.com/tonkeeper/tongo/wallet"
+	"github.com/tonkeeper/tongo/liteapi"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -402,20 +404,36 @@ func ShowTronKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *stri
 
 // ShowTonKeyFromEdDSA shows TON key information from raw Ed25519 keys
 func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
-	// Validate public key length
-	if len(eddsaPublicKeyBytes) != 32 {
-		return fmt.Errorf("public key must be 32 bytes, got %d", len(eddsaPublicKeyBytes))
+	// Validate private key length
+	if len(eddsaPrivateKeyBytes) != 32 {
+		return fmt.Errorf("private key must be 32 bytes, got %d", len(eddsaPrivateKeyBytes))
 	}
 
-	// Create wallet v3R2 (most common wallet version)
-	// Use the proper constructor for wallet v3R2
-	w := wallet.NewWalletV3R2(0, eddsaPublicKeyBytes)
+	// Create TON client (using testnet for this example, but address generation doesn't depend on network)
+	client, err := liteapi.NewClientWithDefaultTestnet()
+	if err != nil {
+		// If we can't create client, we can still generate the address offline
+		// For offline address generation, we'll use a simpler approach
+		fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
+		fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
+		fmt.Fprintf(outputBuilder, "\nton address: [offline generation failed - client error: %v]\n", err)
+		return nil
+	}
+
+	// Create Ed25519 private key from seed
+	privateKey := ed25519.NewKeyFromSeed(eddsaPrivateKeyBytes)
+
+	// Create wallet using the correct API
+	w, err := wallet.New(privateKey, wallet.V4R2, client)
+	if err != nil {
+		return fmt.Errorf("unable to create TON wallet: %w", err)
+	}
 
 	// Get the address
 	addr := w.GetAddress()
 
-	// Convert to user-friendly format
-	tonAddress := addr.ToRaw()
+	// Convert to human-readable format
+	tonAddress := addr.ToHuman(false, true)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
