@@ -408,7 +408,7 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	}
 
 	// Create wallet v3R2 (most common wallet version)
-	w, err := wallet.NewWallet(eddsaPrivateKeyBytes, wallet.V3R2, wallet.Mainnet)
+	w, err := wallet.New(eddsaPublicKeyBytes, wallet.V3R2, 0)
 	if err != nil {
 		return fmt.Errorf("error creating TON wallet: %w", err)
 	}
@@ -417,7 +417,7 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	addr := w.GetAddress()
 
 	// Convert to user-friendly format
-	tonAddress := addr.ToHuman(true, false)
+	tonAddress := addr.ToRaw()
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
