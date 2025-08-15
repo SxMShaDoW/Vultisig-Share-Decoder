@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"encoding/base64"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -406,39 +407,55 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	// 1. Create address using workchain (0) + account ID (hash of public key)
 	// 2. Hash the public key with SHA256
 	// 3. Take the hash as the account ID
-	// 4. Create TON address format
+	// 4. Create TON address format with proper encoding
 	
 	// Hash the public key using SHA256
 	hash := sha256.Sum256(eddsaPublicKeyBytes)
 	
 	// TON uses workchain 0 for regular addresses
-	// The address format combines workchain and account ID
-	workchain := byte(0)
-	
-	// Create the raw address (workchain + account ID)
+	// Create the raw address (1 byte workchain + 32 bytes account ID)
 	rawAddress := make([]byte, 33)
-	rawAddress[0] = workchain
+	rawAddress[0] = 0x00 // workchain 0
 	copy(rawAddress[1:], hash[:])
 	
-	// Calculate checksum using CRC32
-	checksum := crc32.ChecksumIEEE(rawAddress[:33])
+	// Calculate checksum using CRC16-CCITT (not CRC32)
+	// TON uses CRC16 for address checksums
+	checksum := crc16CCITT(rawAddress)
 	
-	// Create final address with checksum
-	fullAddress := make([]byte, 37)
+	// Create final address with checksum (33 bytes address + 2 bytes checksum)
+	fullAddress := make([]byte, 35)
 	copy(fullAddress[:33], rawAddress)
-	fullAddress[33] = byte(checksum >> 24)
-	fullAddress[34] = byte(checksum >> 16)
-	fullAddress[35] = byte(checksum >> 8)
-	fullAddress[36] = byte(checksum)
+	fullAddress[33] = byte(checksum >> 8)
+	fullAddress[34] = byte(checksum & 0xFF)
 	
 	// Encode with Base64 URL-safe encoding (TON standard)
-	tonAddress := base58.Encode(fullAddress)
+	import "encoding/base64"
+	tonAddress := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(fullAddress)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nton address:%s\n", tonAddress)
 
 	return nil
+}
+
+// crc16CCITT calculates CRC16-CCITT checksum for TON addresses
+func crc16CCITT(data []byte) uint16 {
+	const poly = 0x1021
+	crc := uint16(0)
+	
+	for _, b := range data {
+		crc ^= uint16(b) << 8
+		for i := 0; i < 8; i++ {
+			if crc&0x8000 != 0 {
+				crc = (crc << 1) ^ poly
+			} else {
+				crc <<= 1
+			}
+		}
+	}
+	
+	return crc
 }
 
 // GetEdDSACoins returns coins that use EdDSA
