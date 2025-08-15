@@ -334,8 +334,8 @@ func ShowSuiKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	hash := blake2b.Sum256(input)
 
 
-	// Take first 20 bytes for address
-	addressBytes := hash[:20]
+	// Use full hash for address
+	addressBytes := hash[:]
 	
 	// Convert to hex with 0x prefix for Sui address format
 	suiAddress := "0x" + hex.EncodeToString(addressBytes)
