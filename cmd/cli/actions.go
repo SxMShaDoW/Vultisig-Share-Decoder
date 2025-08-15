@@ -197,35 +197,6 @@ func DecryptFileAction(ctx *cli.Context) error {
 	return nil
 }
 
-// deriveAndShowAllKeys derives keys for all supported cryptocurrencies from master key material
-// This mirrors the WASM DeriveAndShowKeys function exactly
-func deriveAndShowAllKeys(privateKeyHex, chaincodeHex string, outputBuilder *strings.Builder) error {
-	// Decode hex strings
-	rootPrivateKeyBytes, err := hex.DecodeString(privateKeyHex)
-	if err != nil {
-		return fmt.Errorf("error decoding private key hex: %v", err)
-	}
-
-	rootChainCodeBytes, err := hex.DecodeString(chaincodeHex)
-	if err != nil {
-		return fmt.Errorf("error decoding chain code hex: %v", err)
-	}
-
-	// Get all supported coins (same as WASM)
-	supportedCoins := keyhandlers.GetSupportedCoins()
-
-	// Display the header like WASM does
-	fmt.Fprintf(outputBuilder, "\n=== Deriving Keys for All Supported Cryptocurrencies ===\n")
-
-	// Process the root key for all coins using the same function as WASM
-	err = keyhandlers.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, supportedCoins, outputBuilder)
-	if err != nil {
-		return fmt.Errorf("error processing keys: %v", err)
-	}
-
-	return nil
-}
-
 func ProcessGG20Files(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
 	var outputBuilder strings.Builder
 	var allSecret []types.TempLocalState
@@ -412,63 +383,6 @@ func TestAddressAction(c *cli.Context) error {
 	}
 
 	return nil
-}
-
-// extractDKLSMasterKey extracts master private key and chain code from DKLS vault files
-// This function mimics the WASM extraction process for consistency
-func extractDKLSMasterKey(fileInfos []types.FileInfo, passwords []string) (privateKeyHex, chaincodeHex string, err error) {
-	// Process each vault file following the same pattern as main.js parseAndDecryptVault
-	var allKeyshareData [][]byte
-	
-	for i, fileInfo := range fileInfos {
-		password := ""
-		if i < len(passwords) {
-			password = passwords[i]
-		}
-
-		// Extract keyshare data following the WASM pattern
-		keyshareData, _, err := parseDKLSVaultFile(fileInfo.Content, password, fileInfo.Name)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to parse vault file %s: %v", fileInfo.Name, err)
-		}
-
-		allKeyshareData = append(allKeyshareData, keyshareData)
-	}
-
-	if len(allKeyshareData) == 0 {
-		return "", "", fmt.Errorf("no valid keyshare data extracted")
-	}
-
-	// Try to use the same WASM processing to get the master key
-	// This will call the WASM library if available
-	result, err := shared.ProcessFileContent(fileInfos, passwords, types.CommandLine)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to process DKLS files: %v", err)
-	}
-
-	// Parse the result to extract master private key and chaincode
-	// The WASM result contains the hex values we need
-	lines := strings.Split(result, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "hex encoded root privkey(ECDSA):") {
-			parts := strings.Split(line, ":")
-			if len(parts) >= 2 {
-				privateKeyHex = strings.TrimSpace(parts[1])
-			}
-		}
-		if strings.Contains(line, "chaincode:") {
-			parts := strings.Split(line, ":")
-			if len(parts) >= 2 {
-				chaincodeHex = strings.TrimSpace(parts[1])
-			}
-		}
-	}
-
-	if privateKeyHex == "" || chaincodeHex == "" {
-		return "", "", fmt.Errorf("could not extract master key and chaincode from DKLS processing result")
-	}
-
-	return privateKeyHex, chaincodeHex, nil
 }
 
 // parseDKLSVaultFile parses a DKLS vault file and extracts the keyshare data
