@@ -332,7 +332,8 @@ func ShowSuiKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	
 	// Hash using Blake2b
 	hash := blake2b.Sum256(input)
-	
+
+
 	// Take first 20 bytes for address
 	addressBytes := hash[:20]
 	
