@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"encoding/base64"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -409,7 +408,7 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	}
 
 	// Create wallet v3R2 (most common wallet version)
-	w, err := wallet.New(wallet.V3R2, 0, eddsaPublicKeyBytes, nil)
+	w, err := wallet.NewWallet(eddsaPrivateKeyBytes, wallet.V3R2, wallet.Mainnet)
 	if err != nil {
 		return fmt.Errorf("error creating TON wallet: %w", err)
 	}
@@ -417,8 +416,8 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	// Get the address
 	addr := w.GetAddress()
 
-	// Convert to user-friendly non-bounceable format
-	tonAddress := addr.ToString(true, false, true)
+	// Convert to user-friendly format
+	tonAddress := addr.ToHuman(true, false)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
