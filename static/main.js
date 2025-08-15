@@ -640,29 +640,35 @@ function parseOutput(rawOutput) {
         if (trimmedLine.startsWith('hex encoded private key for') || 
             trimmedLine.startsWith('hex encoded non-hardened private key for') ||
             trimmedLine.startsWith('hex encoded Ed25519 private key for')) {
-            const parts = trimmedLine.split(':');
-            if (parts.length === 2) {
-                let chain;
-                if (trimmedLine.startsWith('hex encoded private key for')) {
-                    chain = trimmedLine
-                        .replace('hex encoded private key for ', '')
-                        .split(':')[0]
-                        .trim()
-                        .toLowerCase();
-                } else if (trimmedLine.startsWith('hex encoded non-hardened private key for')) {
-                    chain = trimmedLine
-                        .replace('hex encoded non-hardened private key for ', '')
-                        .split(':')[0]
-                        .trim()
-                        .toLowerCase();
-                } else if (trimmedLine.startsWith('hex encoded Ed25519 private key for')) {
-                    chain = trimmedLine
-                        .replace('hex encoded Ed25519 private key for ', '')
-                        .split(':')[0]
-                        .trim()
-                        .toLowerCase();
+            
+            let chain;
+            let privateKey;
+            
+            if (trimmedLine.startsWith('hex encoded private key for')) {
+                const afterPrefix = trimmedLine.replace('hex encoded private key for ', '');
+                const colonIndex = afterPrefix.indexOf(':');
+                if (colonIndex !== -1) {
+                    chain = afterPrefix.substring(0, colonIndex).trim().toLowerCase();
+                    privateKey = afterPrefix.substring(colonIndex + 1).split(' ')[0].trim(); // Take only the hex part before any notes
                 }
-                decoded.PrivateKeys[chain] = parts[1].trim();
+            } else if (trimmedLine.startsWith('hex encoded non-hardened private key for')) {
+                const afterPrefix = trimmedLine.replace('hex encoded non-hardened private key for ', '');
+                const colonIndex = afterPrefix.indexOf(':');
+                if (colonIndex !== -1) {
+                    chain = afterPrefix.substring(0, colonIndex).trim().toLowerCase();
+                    privateKey = afterPrefix.substring(colonIndex + 1).split(' ')[0].trim(); // Take only the hex part before any notes
+                }
+            } else if (trimmedLine.startsWith('hex encoded Ed25519 private key for')) {
+                const afterPrefix = trimmedLine.replace('hex encoded Ed25519 private key for ', '');
+                const colonIndex = afterPrefix.indexOf(':');
+                if (colonIndex !== -1) {
+                    chain = afterPrefix.substring(0, colonIndex).trim().toLowerCase();
+                    privateKey = afterPrefix.substring(colonIndex + 1).split(' ')[0].trim(); // Take only the hex part before any notes
+                }
+            }
+            
+            if (chain && privateKey) {
+                decoded.PrivateKeys[chain] = privateKey;
             }
         }
 
