@@ -27,6 +27,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
 	"crypto/sha256"
+	"github.com/tonkeeper/tongo/wallet"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -402,8 +403,22 @@ func ShowTronKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *stri
 
 // ShowTonKeyFromEdDSA shows TON key information from raw Ed25519 keys
 func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
+	// Validate public key length
+	if len(eddsaPublicKeyBytes) != 32 {
+		return fmt.Errorf("public key must be 32 bytes, got %d", len(eddsaPublicKeyBytes))
+	}
 
-	tonAddress := "ton address calculation logic here"
+	// Create wallet v3R2 (most common wallet version)
+	w, err := wallet.New(wallet.V3R2, 0, eddsaPublicKeyBytes, nil)
+	if err != nil {
+		return fmt.Errorf("error creating TON wallet: %w", err)
+	}
+
+	// Get the address
+	addr := w.GetAddress()
+
+	// Convert to user-friendly non-bounceable format
+	tonAddress := addr.ToString(true, false, true)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
