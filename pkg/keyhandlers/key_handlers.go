@@ -412,11 +412,6 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	// Create TON client (using testnet for this example, but address generation doesn't depend on network)
 	client, err := liteapi.NewClientWithDefaultTestnet()
 	if err != nil {
-		// If we can't create client, we can still generate the address offline
-		// For offline address generation, we'll use a simpler approach
-		fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
-		fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
-		fmt.Fprintf(outputBuilder, "\nton address: [offline generation failed - client error: %v]\n", err)
 		return nil
 	}
 
@@ -424,7 +419,7 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	privateKey := ed25519.NewKeyFromSeed(eddsaPrivateKeyBytes)
 
 	// Create wallet using the correct API
-	w, err := wallet.New(privateKey, wallet.V4R2, client)
+	w, err := wallet.New(privateKey, wallet.V3R2, client)
 	if err != nil {
 		return fmt.Errorf("unable to create TON wallet: %w", err)
 	}
@@ -433,7 +428,7 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	addr := w.GetAddress()
 
 	// Convert to human-readable format
-	tonAddress := addr.ToHuman(false, true)
+	tonAddress := addr.ToHuman(false, false)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
