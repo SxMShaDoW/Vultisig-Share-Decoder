@@ -316,7 +316,7 @@ func ShowSolanaKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []b
 	// For Solana, the Ed25519 public key IS the address
 	solanaAddress := base58.Encode(eddsaPublicKeyBytes)
 
-	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for solana:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for solana:%s\n (Note: This is a private key scalar and can only be used for signing, not importing into another wallet)", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for solana:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nsolana address:%s\n", solanaAddress)
 
@@ -344,7 +344,7 @@ func ShowSuiKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	// Convert to hex with 0x prefix for Sui address format
 	suiAddress := "0x" + hex.EncodeToString(addressBytes)
 
-	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for sui:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for sui:%s (Note: This is a private key scalar and can only be used for signing, not importing into another wallet)\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for sui:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nsui address:%s\n", suiAddress)
 
@@ -432,7 +432,7 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	// Convert to user-friendly, non-bounceable, mainnet format
 	tonAddress := addr.ToHuman(false, false) // bounceable=false, testnet=false
 
-	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s (Note: This is a private key scalar and can only be used for signing, not importing into another wallet)\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nton address:%s\n", tonAddress)
 
