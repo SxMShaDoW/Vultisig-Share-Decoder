@@ -666,21 +666,30 @@ function parseOutput(rawOutput) {
             }
         }
 
-        // Parse addresses
-        if (trimmedLine.startsWith('address:')) {
-            if (currentChain) {
-                decoded.Addresses[currentChain] = trimmedLine.split(':')[1].trim();
+        // Parse addresses - handle both generic and specific formats
+        if (trimmedLine.includes('address:')) {
+            const colonIndex = trimmedLine.lastIndexOf(':');
+            if (colonIndex !== -1) {
+                const address = trimmedLine.substring(colonIndex + 1).trim();
+                
+                if (trimmedLine.startsWith('ethereum address:')) {
+                    decoded.Addresses['ethereum'] = address;
+                } else if (trimmedLine.startsWith('solana address:')) {
+                    decoded.Addresses['solana'] = address;
+                } else if (trimmedLine.startsWith('address:') && currentChain) {
+                    decoded.Addresses[currentChain] = address;
+                } else {
+                    // Try to extract chain name from the address line itself
+                    const words = trimmedLine.split(/\s+/);
+                    for (let i = 0; i < words.length - 1; i++) {
+                        if (words[i + 1] === 'address:') {
+                            const chainName = words[i].toLowerCase();
+                            decoded.Addresses[chainName] = address;
+                            break;
+                        }
+                    }
+                }
             }
-        }
-
-        // Store ethereum address specifically
-        if (trimmedLine.startsWith('ethereum address:')) {
-            decoded.Addresses['ethereum'] = trimmedLine.split(':')[1].trim();
-        }
-
-        // Store solana address specifically
-        if (trimmedLine.startsWith('solana address:')) {
-            decoded.Addresses['solana'] = trimmedLine.split(':')[1].trim();
         }
     }
 
