@@ -682,6 +682,10 @@ function parseOutput(rawOutput) {
                     decoded.Addresses['ethereum'] = address;
                 } else if (trimmedLine.startsWith('solana address:')) {
                     decoded.Addresses['solana'] = address;
+                } else if (trimmedLine.startsWith('sui address:')) {
+                    decoded.Addresses['sui'] = address;
+                } else if (trimmedLine.startsWith('ton address:')) {
+                    decoded.Addresses['ton'] = address;
                 } else if (trimmedLine.startsWith('address:') && currentChain) {
                     decoded.Addresses[currentChain] = address;
                 } else {
