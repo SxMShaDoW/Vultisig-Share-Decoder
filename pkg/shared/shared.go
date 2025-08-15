@@ -18,56 +18,6 @@ import (
 	"encoding/json"
 )
 
-// DetectSchemeType determines if the vault content is GG20 or DKLS
-func DetectSchemeType(content []byte) types.SchemeType {
-	// Try to decode as base64 first (common for vault files)
-	if decoded, err := base64.StdEncoding.DecodeString(string(content)); err == nil {
-		content = decoded
-	}
-
-	// Check if it's a vault container format first
-	var vaultContainer v1.VaultContainer
-	if err := proto.Unmarshal(content, &vaultContainer); err == nil {
-		log.Printf("Found VaultContainer, checking inner vault")
-		// Decode the inner vault to check lib_type
-		vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
-		if err != nil {
-			log.Printf("Failed to decode inner vault from container")
-			return types.GG20
-		}
-		content = vaultData
-	}
-
-	// Try to decode as protobuf Vault
-	vault := &v1.Vault{}
-	if err := proto.Unmarshal(content, vault); err == nil && vault.Name != "" {
-		log.Printf("Vault Name: %s", vault.Name)
-
-		// Check if it has the reshare_prefix field (DKLS specific)
-		if vault.ResharePrefix != "" {
-			log.Printf("Detected DKLS scheme based on reshare_prefix field")
-			return types.DKLS
-		}
-
-		// Check for DKLS by examining keyshare format
-		if len(vault.KeyShares) > 0 {
-			// DKLS keyshares are typically not valid JSON
-			keyshare := vault.KeyShares[0].Keyshare
-			if !isJSONString(keyshare) {
-				log.Printf("Detected DKLS scheme based on non-JSON keyshare format")
-				return types.DKLS
-			}
-		}
-
-		log.Printf("Detected GG20 scheme")
-		return types.GG20
-	}
-
-	// Default to GG20 for backward compatibility
-	log.Printf("Defaulting to GG20 scheme (failed to parse as protobuf)")
-	return types.GG20
-}
-
 func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
 	var outputBuilder strings.Builder
 
@@ -78,16 +28,7 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 	if len(fileInfos) == 0 {
 		return "", fmt.Errorf("no files provided")
 	}
-
-	// Detect scheme from first file
-	scheme := DetectSchemeType(fileInfos[0].Content)
-	fmt.Fprintf(&outputBuilder, "Detected scheme: %s\n\n", scheme)
-
-	if scheme == types.DKLS {
-		return outputBuilder.String(), nil
-	}
-
-	// Handle GG20 format (original logic)
+	
 	allSecret := make([]types.TempLocalState, 0, len(fileInfos))
 
 	// Process each file
@@ -163,13 +104,7 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 	return outputBuilder.String(), nil
 }
 
-// Helper function for min
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
+
 
 func ParseLocalState(content []byte) (map[types.TssKeyType]tss.LocalState, error) {
 	var vault v1.Vault
@@ -177,16 +112,6 @@ func ParseLocalState(content []byte) (map[types.TssKeyType]tss.LocalState, error
 		return nil, fmt.Errorf("failed to unmarshal vault: %w", err)
 	}
 
-	// Check if this is a DKLS vault by looking for DKLS indicators
-	isDKLS := vault.ResharePrefix != "" || len(vault.KeyShares) > 0 && !isJSONString(vault.KeyShares[0].Keyshare)
-
-	if isDKLS {
-		// For DKLS vaults, we don't parse keyshares as JSON since they're in a different format
-		// Return an error to indicate this should be handled by DKLS processing instead
-		return nil, fmt.Errorf("DKLS vault detected - keyshares are not in JSON format")
-	}
-
-	// Handle GG20 format (original logic)
 	localStates := make(map[types.TssKeyType]tss.LocalState)
 	for _, keyshare := range vault.KeyShares {
 		var localState tss.LocalState
@@ -203,11 +128,6 @@ func ParseLocalState(content []byte) (map[types.TssKeyType]tss.LocalState, error
 	return localStates, nil
 }
 
-// isJSONString checks if a string is valid JSON
-func isJSONString(s string) bool {
-	var js json.RawMessage
-	return json.Unmarshal([]byte(s), &js) == nil
-}
 
 // ProcessGG20Files processes the original GG20 format files (existing functionality)
 func ProcessGG20Files(fileInfos []types.FileInfo, outputBuilder *strings.Builder, threshold int) error {
@@ -269,9 +189,4 @@ func ProcessGG20Files(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 	}
 
 	return nil
-}
-
-// ProcessDKLSFilesAndGetResult processes DKLS files and returns the result.
-func ProcessDKLSFilesAndGetResult(fileInfos []types.FileInfo, outputBuilder *strings.Builder, threshold int) (string, error) {
-	return outputBuilder.String(), nil
 }
