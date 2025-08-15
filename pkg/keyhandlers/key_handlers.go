@@ -3,7 +3,6 @@ package keyhandlers
 import (
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/btcsuite/btcd/btcutil"
@@ -24,22 +23,7 @@ import (
 	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
 	"main/tss"
 	"github.com/btcsuite/btcutil/base58"
-	edwards "github.com/decred/dcrd/dcrec/edwards/v2"
 )
-
-// CoinConfig represents the configuration for handling a specific cryptocurrency's keys.
-type CoinConfig struct {
-	Name       string
-	DerivePath string
-	Action     func(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error
-}
-
-// CoinConfigEdDSA represents the configuration for handling EdDSA-based cryptocurrencies.
-type CoinConfigEdDSA struct {
-	Name       string
-	DerivePath string
-	Action     func(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error
-}
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
 	pathBuf, err := tss.GetDerivePathBytes(derivePath)
