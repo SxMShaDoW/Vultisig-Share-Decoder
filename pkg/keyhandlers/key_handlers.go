@@ -351,34 +351,38 @@ func ShowSuiKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 
 // ShowTronKeyFromEdDSA shows Tron key information from raw Ed25519 keys
 func ShowTronKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
-	// For Tron, we need to create an address from the public key using Keccak256 hashing
-	// Tron address = version_byte (0x41) + Keccak256(public_key)[12:32] + checksum
+	// For Tron address generation from Ed25519 public key:
+	// 1. Use the Ed25519 public key directly (32 bytes)
+	// 2. Hash with Keccak256
+	// 3. Take last 20 bytes
+	// 4. Add version byte (0x41)
+	// 5. Calculate checksum with double SHA256
+	// 6. Base58 encode
 	
-	// Hash the public key using Keccak256 (SHA3)
+	// Step 1: Hash the Ed25519 public key using Keccak256
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(eddsaPublicKeyBytes)
 	pubKeyHash := hash.Sum(nil)
 	
-	// Take the last 20 bytes of the hash
-	addressBytes := pubKeyHash[12:32]
+	// Step 2: Take the last 20 bytes of the hash (equivalent to hash[12:32])
+	ethAddr := pubKeyHash[12:]
 	
-	// Add Tron version byte (0x41 for mainnet)
-	versionedAddress := make([]byte, 21)
-	versionedAddress[0] = 0x41 // Tron mainnet version byte
-	copy(versionedAddress[1:], addressBytes)
+	// Step 3: Prefix with Tron version byte (0x41 for mainnet)
+	tronAddr := make([]byte, 21)
+	tronAddr[0] = 0x41
+	copy(tronAddr[1:], ethAddr)
 	
-	// Calculate checksum using double SHA256 (Tron uses SHA256, not Keccak256 for checksum)
-	hash1 := sha256.Sum256(versionedAddress)
-	hash2 := sha256.Sum256(hash1[:])
-	checksum := hash2[:4] // Take first 4 bytes
+	// Step 4: Calculate checksum using double SHA256 (Base58Check encoding)
+	firstSHA := sha256.Sum256(tronAddr)
+	secondSHA := sha256.Sum256(firstSHA[:])
+	checksum := secondSHA[:4]
 	
-	// Combine versioned address + checksum
-	fullAddress := make([]byte, 25)
-	copy(fullAddress[:21], versionedAddress)
-	copy(fullAddress[21:], checksum)
+	// Step 5: Combine address + checksum and encode with Base58
+	addrWithChecksum := make([]byte, 25)
+	copy(addrWithChecksum[:21], tronAddr)
+	copy(addrWithChecksum[21:], checksum)
 	
-	// Encode to Base58 for final Tron address
-	tronAddress := base58.Encode(fullAddress)
+	tronAddress := base58.Encode(addrWithChecksum)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for tron:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for tron:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
