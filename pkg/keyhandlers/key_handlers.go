@@ -25,6 +25,7 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
+	"crypto/sha256"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -366,16 +367,10 @@ func ShowTronKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byt
 	versionedAddress[0] = 0x41 // Tron mainnet version byte
 	copy(versionedAddress[1:], addressBytes)
 	
-	// Calculate checksum (double SHA256 of versioned address, take first 4 bytes)
-	checksum1 := sha3.NewLegacyKeccak256()
-	checksum1.Write(versionedAddress)
-	hash1 := checksum1.Sum(nil)
-	
-	checksum2 := sha3.NewLegacyKeccak256()
-	checksum2.Write(hash1)
-	hash2 := checksum2.Sum(nil)
-	
-	checksum := hash2[:4]
+	// Calculate checksum using double SHA256 (Tron uses SHA256, not Keccak256 for checksum)
+	hash1 := sha256.Sum256(versionedAddress)
+	hash2 := sha256.Sum256(hash1[:])
+	checksum := hash2[:4] // Take first 4 bytes
 	
 	// Combine versioned address + checksum
 	fullAddress := make([]byte, 25)
