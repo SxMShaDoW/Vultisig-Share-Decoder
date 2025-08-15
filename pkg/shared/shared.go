@@ -10,7 +10,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
-	"main/pkg/dkls"
 	"main/pkg/fileutils"
 	"main/pkg/keyprocessing"
 	"main/pkg/types"
@@ -69,110 +68,6 @@ func DetectSchemeType(content []byte) types.SchemeType {
 	return types.GG20
 }
 
-// ProcessDKLSFiles processes DKLS format files
-func ProcessDKLSFiles(fileInfos []types.FileInfo, outputBuilder *strings.Builder, threshold int) error {
-	log.Printf("ProcessDKLSFiles: Processing %d DKLS files with threshold %d", len(fileInfos), threshold)
-
-	var dklsShares []dkls.DKLSShareData
-	var partyIDs []string
-
-	for i, fileInfo := range fileInfos {
-		log.Printf("Processing DKLS file %d: %s", i, fileInfo.Name)
-
-		// Parse the vault from the file content
-		vault, _, err := ParseDKLSVault(fileInfo.Content)
-		if err != nil {
-			return fmt.Errorf("failed to parse DKLS vault from file %s: %w", fileInfo.Name, err)
-		}
-
-		// Log vault information for debugging
-		log.Printf("Vault: Name='%s', LocalPartyId='%s', ResharePrefix='%s'", 
-			vault.Name, vault.LocalPartyId, vault.ResharePrefix)
-		log.Printf("Vault has %d keyshares", len(vault.KeyShares))
-		log.Printf("PublicKeyEcdsa: %s", vault.PublicKeyEcdsa)
-		log.Printf("PublicKeyEddsa: %s", vault.PublicKeyEddsa)
-
-		// Extract DKLS share data from vault
-		shareData := dkls.DKLSShareData{
-			ID:      vault.LocalPartyId,
-			PartyID: vault.LocalPartyId,
-		}
-
-		// Get keyshare data - for DKLS, we need the raw keyshare content
-		if len(vault.KeyShares) > 0 {
-			// For DKLS, the keyshare is not JSON but raw binary/string data
-			keyshareData := vault.KeyShares[0].Keyshare
-			shareData.ShareData = []byte(keyshareData)
-			log.Printf("DKLS keyshare data length: %d bytes", len(shareData.ShareData))
-			log.Printf("Keyshare preview: %s", string(shareData.ShareData[:min(len(shareData.ShareData), 100)]))
-
-			// If there are multiple keyshares, log them all
-			for j, ks := range vault.KeyShares {
-				log.Printf("Keyshare %d: PublicKey=%s, Length=%d bytes", 
-					j, ks.PublicKey, len(ks.Keyshare))
-			}
-		} else {
-			log.Printf("Warning: No keyshares found in DKLS vault")
-		}
-
-		dklsShares = append(dklsShares, shareData)
-		partyIDs = append(partyIDs, shareData.PartyID)
-
-		fmt.Fprintf(outputBuilder, "DKLS Share %d (%s):\n", i+1, fileInfo.Name)
-		fmt.Fprintf(outputBuilder, "  Vault Name: %s\n", vault.Name)
-		fmt.Fprintf(outputBuilder, "  Party ID: %s\n", shareData.PartyID)
-		fmt.Fprintf(outputBuilder, "  Share ID: %s\n", shareData.ID)
-		fmt.Fprintf(outputBuilder, "  ECDSA Public Key: %s\n", vault.PublicKeyEcdsa)
-		fmt.Fprintf(outputBuilder, "  EdDSA Public Key: %s\n", vault.PublicKeyEddsa)
-		fmt.Fprintf(outputBuilder, "  Share Data Length: %d bytes\n\n", len(shareData.ShareData))
-	}
-
-	if len(dklsShares) < threshold {
-		return fmt.Errorf("insufficient DKLS shares: need %d, got %d", threshold, len(dklsShares))
-	}
-
-	// Process the DKLS shares
-	return keyprocessing.ProcessDKLSKeys(threshold, dklsShares, partyIDs, outputBuilder)
-}
-
-// ParseDKLSVault parses a DKLS vault from content
-func ParseDKLSVault(content []byte) (*v1.Vault, dkls.DKLSShareData, error) {
-	log.Printf("ParseDKLSVault: Starting parse for %d bytes", len(content))
-
-	// Try to decode as base64 first
-	if decoded, err := base64.StdEncoding.DecodeString(string(content)); err == nil {
-		log.Printf("ParseDKLSVault: Successfully decoded base64, new length: %d", len(decoded))
-		content = decoded
-	}
-
-	// Check if it's a vault container format first
-	var vaultContainer v1.VaultContainer
-	if err := proto.Unmarshal(content, &vaultContainer); err == nil {
-		log.Printf("ParseDKLSVault: Found VaultContainer")
-		// Decode the inner vault
-		vaultData, err := base64.StdEncoding.DecodeString(vaultContainer.Vault)
-		if err != nil {
-			return nil, dkls.DKLSShareData{}, fmt.Errorf("failed to decode inner vault: %w", err)
-		}
-		log.Printf("ParseDKLSVault: Decoded inner vault, length: %d", len(vaultData))
-		content = vaultData
-	}
-
-	// Parse as vault
-	vault := &v1.Vault{}
-	if err := proto.Unmarshal(content, vault); err != nil {
-		return nil, dkls.DKLSShareData{}, fmt.Errorf("failed to unmarshal vault: %w", err)
-	}
-
-	log.Printf("ParseDKLSVault: Successfully parsed vault '%s' with %d keyshares", vault.Name, len(vault.KeyShares))
-
-	// Check lib_type to confirm this is a DKLS vault (lib_type = 1)
-	// Note: The protobuf field might be named differently in the actual struct
-	log.Printf("ParseDKLSVault: Vault appears to be DKLS format based on structure")
-
-	return vault, dkls.DKLSShareData{}, nil
-}
-
 func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
 	var outputBuilder strings.Builder
 
@@ -189,13 +84,6 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 	fmt.Fprintf(&outputBuilder, "Detected scheme: %s\n\n", scheme)
 
 	if scheme == types.DKLS {
-		// Process DKLS files
-		threshold := len(fileInfos) // For DKLS, typically use all shares
-		fmt.Fprintf(&outputBuilder, "Processing %d DKLS files with threshold %d\n\n", len(fileInfos), threshold)
-		err := ProcessDKLSFiles(fileInfos, &outputBuilder, threshold)
-		if err != nil {
-			return "", fmt.Errorf("error processing DKLS files: %w", err)
-		}
 		return outputBuilder.String(), nil
 	}
 
@@ -385,9 +273,5 @@ func ProcessGG20Files(fileInfos []types.FileInfo, outputBuilder *strings.Builder
 
 // ProcessDKLSFilesAndGetResult processes DKLS files and returns the result.
 func ProcessDKLSFilesAndGetResult(fileInfos []types.FileInfo, outputBuilder *strings.Builder, threshold int) (string, error) {
-	err := ProcessDKLSFiles(fileInfos, outputBuilder, threshold)
-	if err != nil {
-		return "", err
-	}
 	return outputBuilder.String(), nil
 }

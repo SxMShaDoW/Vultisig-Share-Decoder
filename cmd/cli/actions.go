@@ -129,7 +129,7 @@ func RecoverAction(cCtx *cli.Context) error {
 	switch scheme {
 	case "dkls":
 		fmt.Println("Using DKLS scheme")
-		output, err = ProcessDKLSFiles(fileInfos, passwords, source)
+		return fmt.Errorf("DKLS is unsupported on the CLI for now. Please use the web interface.")
 	case "gg20":
 		fmt.Println("Using GG20 scheme")
 		output, err = ProcessGG20Files(fileInfos, passwords, source)
@@ -224,42 +224,6 @@ func deriveAndShowAllKeys(privateKeyHex, chaincodeHex string, outputBuilder *str
 	}
 
 	return nil
-}
-
-func ProcessDKLSFiles(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
-	var outputBuilder strings.Builder
-
-	fmt.Fprintf(&outputBuilder, "=== DKLS Key Recovery ===\n")
-	fmt.Fprintf(&outputBuilder, "Processing %d DKLS files\n\n", len(fileInfos))
-
-	// Step 1: Try to extract master private key and chaincode directly (like WASM)
-	privateKeyHex, chaincodeHex, err := extractDKLSMasterKey(fileInfos, passwords)
-	if err == nil {
-		// Success! Display the extracted keys
-		fmt.Fprintf(&outputBuilder, "✅ Master Key Extraction Successful!\n")
-		fmt.Fprintf(&outputBuilder, "Master Private Key: %s\n", privateKeyHex)
-		fmt.Fprintf(&outputBuilder, "Chain Code: %s\n\n", chaincodeHex)
-
-		// Derive and show all keys using the same pattern as WASM
-		if err := deriveAndShowAllKeys(privateKeyHex, chaincodeHex, &outputBuilder); err != nil {
-			fmt.Fprintf(&outputBuilder, "❌ Error deriving keys: %v\n", err)
-		}
-
-		return outputBuilder.String(), nil
-	}
-
-	// If extraction failed, fall back to the complex reconstruction method
-	fmt.Fprintf(&outputBuilder, "❌ Direct extraction failed: %v\n", err)
-	fmt.Fprintf(&outputBuilder, "Falling back to native/WASM reconstruction...\n\n")
-
-	threshold := len(fileInfos) // For DKLS, typically use all shares
-
-	err = shared.ProcessDKLSFiles(fileInfos, &outputBuilder, threshold)
-	if err != nil {
-		return "", fmt.Errorf("error processing DKLS files: %w", err)
-	}
-
-	return outputBuilder.String(), nil
 }
 
 func ProcessGG20Files(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
