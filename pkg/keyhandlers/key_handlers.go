@@ -3,6 +3,7 @@ package keyhandlers
 import (
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/btcsuite/btcd/btcutil"
