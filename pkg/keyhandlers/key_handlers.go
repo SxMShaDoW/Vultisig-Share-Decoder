@@ -429,7 +429,6 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	fullAddress[34] = byte(checksum & 0xFF)
 	
 	// Encode with Base64 URL-safe encoding (TON standard)
-	import "encoding/base64"
 	tonAddress := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(fullAddress)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
