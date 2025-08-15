@@ -165,5 +165,7 @@ func ProcessEdDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBu
     fmt.Fprintf(outputBuilder, "\nhex encoded root privkey 64 bit base58(EdDSA): %s\n", privateKeyBase58) 
     fmt.Fprintf(outputBuilder, "\njson key:%v\n", jsonKey)
 
-    return nil
+    // Now process EdDSA coins using the reconstructed root keys
+    eddsaCoins := keyhandlers.GetEdDSACoins()
+    return keyhandlers.ProcessEdDSAKeyForCoins(privateKeyBytes, publicKeyBytes, eddsaCoins, outputBuilder)
 }
