@@ -5,11 +5,18 @@ import (
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 )
 
-// CoinConfig represents configuration for a supported cryptocurrency
+// CoinConfig represents configuration for a supported ECDSA-based cryptocurrency
 type CoinConfig struct {
 	Name       string
 	DerivePath string
 	Action     func(*hdkeychain.ExtendedKey, *strings.Builder) error
+}
+
+// CoinConfigEdDSA represents configuration for a supported EdDSA-based cryptocurrency
+type CoinConfigEdDSA struct {
+	Name       string
+	DerivePath string
+	Action     func([]byte, []byte, *strings.Builder) error // (privateKey, publicKey, output) -> error
 }
 
 // GetSupportedCoins returns the list of all supported cryptocurrencies with their configurations
