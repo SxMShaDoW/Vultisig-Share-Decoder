@@ -2,7 +2,7 @@
 
 ## System Overview
 
-The Vultisig Share Decoder is a multi-platform application that recovers cryptographic keys from TSS (Threshold Signature Scheme) key shares. It supports three deployment modes: CLI, Web Server, and WebAssembly, with support for both GG20 and DKLS threshold signature schemes.
+The Vultisig Share Decoder is a multi-platform application that recovers cryptographic keys from TSS (Threshold Signature Scheme) key shares. It supports three deployment modes: CLI, Web Server, and WebAssembly. GG20 is supported across all modes, while DKLS is only supported via the web interface.
 
 ## High-Level Architecture
 
@@ -56,12 +56,12 @@ The Vultisig Share Decoder is a multi-platform application that recovers cryptog
 ┌─────────────────────────────────────────────────────────────────┐
 │                  Cryptographic Layer                           │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌───────────────┐ ┌───────────────┐ ┌───────────────────────┐ │
-│  │   pkg/dkls/   │ │    tss/       │ │    static/vs_wasm*    │ │
-│  │ DKLS scheme   │ │ GG20 TSS lib  │ │  Native WASM module   │ │
-│  │ processing    │ │ (bnb-chain)   │ │  (Rust compiled)      │ │
-│  │ Native + WASM │ │               │ │                       │ │
-│  └───────────────┘ └───────────────┘ └───────────────────────┘ │
+│  ┌───────────────┐ ┌───────────────────────────────────────────┐ │
+│  │    tss/       │ │    static/vs_wasm* (Web Interface Only)   │ │
+│  │ GG20 TSS lib  │ │  DKLS WASM module (Rust compiled)         │ │
+│  │ (bnb-chain)   │ │  Only available in web interface          │ │
+│  │               │ │                                           │ │
+│  └───────────────┘ └───────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -70,12 +70,13 @@ The Vultisig Share Decoder is a multi-platform application that recovers cryptog
 ### 1. Entry Points (`cmd/`)
 
 #### CLI Mode (`cmd/cli/`)
-- **Purpose**: Command-line interface for server/desktop environments
+- **Purpose**: Command-line interface for server/desktop environments (GG20 only)
 - **Build Tag**: `cli`
 - **Key Files**: 
   - `main.go`: CLI app configuration using urfave/cli
   - `actions.go`: CLI-specific actions (decrypt, recover)
 - **Usage**: `./dist/cli recover --files "share1.vult" --files "share2.vult"`
+- **Limitations**: DKLS scheme not supported in CLI mode
 
 #### Web Server (`cmd/server/`)
 - **Purpose**: HTTP server serving static files and WASM
@@ -136,14 +137,14 @@ The Vultisig Share Decoder is a multi-platform application that recovers cryptog
   - Cosmos-based chains (THORChain)
   - Future: Solana, etc.
 
-### 3. DKLS Implementation Details (`pkg/dkls/`)
+### 3. DKLS Implementation (Web Interface Only)
 
 #### DKLS Architecture Overview
-The DKLS implementation uses a multi-layer approach with fallback mechanisms:
+DKLS processing is only available through the web interface using WASM modules:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    DKLS Processing Flow                        │
+│              DKLS Processing Flow (Web Interface Only)         │
 ├─────────────────────────────────────────────────────────────────┤
 │  1. Vault Parsing & Keyshare Extraction                        │
 │     ┌─────────────────────────────────────────────────────────┐ │
@@ -152,22 +153,14 @@ The DKLS implementation uses a multi-layer approach with fallback mechanisms:
 │     │ • Binary structure analysis                             │ │
 │     └─────────────────────────────────────────────────────────┘ │
 │                              │                                 │
-│  2. Native Go Reconstruction (Primary)                         │
-│     ┌─────────────────────────────────────────────────────────┐ │
-│     │ • Entropy-based key extraction                          │ │
-│     │ • Secp256k1 validation                                  │ │
-│     │ • Deterministic combination methods                     │ │
-│     │ • Private key candidate scoring                         │ │
-│     └─────────────────────────────────────────────────────────┘ │
-│                              │                                 │
-│  3. WASM Fallback (if Node.js available)                      │
+│  2. WASM Processing (Browser Only)                             │
 │     ┌─────────────────────────────────────────────────────────┐ │
 │     │ • vs_wasm Rust library integration                      │ │
 │     │ • Keyshare.fromBytes() processing                       │ │
 │     │ • KeyExportSession reconstruction                       │ │
 │     └─────────────────────────────────────────────────────────┘ │
 │                              │                                 │
-│  4. Cryptocurrency Address Generation                          │
+│  3. Cryptocurrency Address Generation                          │
 │     ┌─────────────────────────────────────────────────────────┐ │
 │     │ • HD key derivation for multiple chains                │ │
 │     │ • Format conversion (WIF, hex, addresses)              │ │
@@ -176,62 +169,16 @@ The DKLS implementation uses a multi-layer approach with fallback mechanisms:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### Native DKLS Processor (`dkls_native.go`)
-- **Purpose**: Pure Go implementation of DKLS key reconstruction
-- **Key Components**:
-  - `NativeDKLSProcessor`: Main processor class
-  - `extractSecretShareFromDKLS()`: Binary keyshare parsing
-  - `reconstructSecret()`: Threshold secret sharing reconstruction
-  - `scorePrivateKeyCandidate()`: Heuristic key validation
-  - `findEntropyBlocks()`: High-entropy region detection
-  - `analyzeKeyshareStructure()`: Binary structure analysis
-
-### DKLS Processing Deep Dive
-
-### Keyshare Structure Analysis
-DKLS keyshares have a complex binary structure that requires careful parsing:
-
-1. **Header Section** (0-64 bytes): Metadata, party IDs, thresholds
-2. **Cryptographic Parameters** (variable): Public keys, commitments
-3. **Private Key Material** (embedded): Share-specific secret data
-4. **Authentication Data** (trailing): Signatures, checksums
-
-### Enhanced Key Extraction Strategies ✅
-
-#### Primary: Multi-Layer Entropy Analysis (SUCCESSFUL)
-- **Shannon Entropy Analysis**: Scan for regions with entropy > 7.5
-- **Chi-Square Randomness Test**: Validate cryptographic randomness
-- **Byte Distribution Analysis**: Ensure proper key material distribution
-- **Cross-validation**: Find intersection of all three methods for highest confidence
-
-#### Secondary: Enhanced Pattern Recognition (SUCCESSFUL)
-- **DKLS-Specific Markers**: Length-prefixed data with type markers (0x04, 0x08, 0x12, 0x1a)
-- **Protobuf Structure Analysis**: Field tags and length prefixes
-- **Metadata Boundary Detection**: Key material after section separators
-- **32-byte Alignment**: Cryptographic data aligned to natural boundaries
-
-#### Tertiary: Advanced Deterministic Generation (SUCCESSFUL)
-- **Multi-round Hashing**: SHA-256 with structural salts and entropy mixing
-- **Share Quality Weighting**: Combine shares based on data quality metrics
-- **Secp256k1 Validation Loop**: Iterate until valid private key is found
-- **Cross-platform Consistency**: Deterministic results across environments
-
-#### Quaternary: Enhanced Reconstruction Methods (SUCCESSFUL)
-- **Simulated Lagrange Interpolation**: Mathematical reconstruction simulation
-- **Weighted Share Combination**: Quality-based share weighting
-- **Multi-hash Combination**: Multiple hash algorithms with different strategies
-- **Entropy-Mixed XOR**: Position-specific entropy-guided combination
-
-#### WASM Integration (`dkls_wrapper.go`)
-- **Purpose**: Interface to Rust-based vs_wasm library
+#### WASM Integration (Web Interface Only)
+- **Purpose**: Browser-based DKLS processing using Rust WASM library
 - **Key Features**:
-  - Node.js script generation for WASM execution
+  - Direct browser WASM execution
   - JSON-based communication protocol
-  - Fallback mechanism when native Go fails
+  - No server-side DKLS processing
 - **Integration Points**:
   - `static/vs_wasm.js`: Rust WASM module
   - `static/vs_wasm_bg.wasm`: Compiled binary
-  - Generated Node.js scripts for execution
+  - Direct JavaScript integration in browser
 
 ### 4. Cryptographic Schemes
 
@@ -307,13 +254,12 @@ User Input → File Validation → Encryption Detection → Vault Parsing → Ke
 
 ### 2. Scheme Detection
 ```
-Vault Structure → Protobuf Analysis → LibType Detection → Scheme Assignment (GG20/DKLS)
+Vault Structure → Protobuf Analysis → LibType Detection → Scheme Assignment (GG20 via CLI/Web, DKLS via Web only)
 ```
 
-### 3. DKLS Key Reconstruction Flow
+### 3. DKLS Key Reconstruction Flow (Web Interface Only)
 ```
-Binary Keyshare → Base64 Decode → Structure Analysis → Enhanced Entropy Scanning → 
-Key Extraction → Secp256k1 Validation → Threshold Combination → Private Key
+Binary Keyshare → Base64 Decode → WASM Processing → Key Extraction → Private Key
 ```
 
 ### 4. GG20 Key Reconstruction Flow

@@ -7,7 +7,7 @@ You can (and should) run this locally.
 
 ## Supported Schemes
 - **GG20**: Full support via CLI and web interface
-- **DKLS**: Currently supported only via the web interface (CLI support coming soon)
+- **DKLS**: Only supported via the web interface (CLI support not available)
 
 ## Demo
 [Demo](https://vultisig-share-decoder.replit.app/?)
@@ -26,7 +26,7 @@ Note: You should not trust this binary and create your own with `make all` or `m
 ## CLI Commands
 
 ### Recover Keys from Vault Shares
-**Note: DKLS recovery is currently only supported via the web interface**
+**Note: DKLS recovery is only supported via the web interface, not the CLI**
 
 Recover private keys from GG20 vault shares:
 ```bash
@@ -39,9 +39,9 @@ make cli && ./dist/cli recover --files "honeypot.bak"
 make cli && ./dist/cli recover --files "Test-part1of2.vult" --files "Test-part2of2.vult"
 ```
 
-Force a specific scheme (defaults to gg20 by default):
+For GG20 schemes, you can force the scheme (defaults to auto-detection):
 ```bash
-make cli && ./dist/cli recover --files "vault1.vult" --files "vault2.vult" --scheme dkls
+make cli && ./dist/cli recover --files "vault1.vult" --files "vault2.vult" --scheme gg20
 ```
 
 ### Test Address Generation
