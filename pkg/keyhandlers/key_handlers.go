@@ -27,7 +27,6 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
 	"crypto/sha256"
-	"hash/crc32"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
