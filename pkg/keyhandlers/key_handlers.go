@@ -402,55 +402,14 @@ func ShowTronKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *stri
 
 // ShowTonKeyFromEdDSA shows TON key information from raw Ed25519 keys
 func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
-	// TON address generation follows a specific format:
-	// 1. Create state init for wallet contract
-	// 2. Calculate address from state init hash
-	// 3. Format as user-friendly address
-	
-	// For TON, we need to create a wallet contract state init
-	// This is a simplified version - in practice, TON wallets use specific contract code
-	
-	// Create account ID from public key hash
-	hash := sha256.Sum256(eddsaPublicKeyBytes)
-	
-	// TON address structure: tag (0x11 for bounceable) + workchain (1 byte) + address (32 bytes) + checksum (2 bytes)
-	addressData := make([]byte, 34)
-	addressData[0] = 0x11 // Bounceable address tag
-	addressData[1] = 0x00 // Workchain 0
-	copy(addressData[2:], hash[:32]) // Use hash as address
-	
-	// Calculate CRC16 checksum
-	checksum := crc16CCITT(addressData[:34])
-	addressData[32] = byte(checksum >> 8)
-	addressData[33] = byte(checksum & 0xFF)
-	
-	// Encode with Base64 URL-safe encoding (TON standard)
-	tonAddress := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(addressData)
+
+	tonAddress := "ton address calculation logic here"
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nton address:%s\n", tonAddress)
 
 	return nil
-}
-
-// crc16CCITT calculates CRC16-CCITT checksum for TON addresses
-func crc16CCITT(data []byte) uint16 {
-	const poly = 0x1021
-	crc := uint16(0)
-	
-	for _, b := range data {
-		crc ^= uint16(b) << 8
-		for i := 0; i < 8; i++ {
-			if crc&0x8000 != 0 {
-				crc = (crc << 1) ^ poly
-			} else {
-				crc <<= 1
-			}
-		}
-	}
-	
-	return crc
 }
 
 // GetEdDSACoins returns coins that use EdDSA
@@ -466,10 +425,10 @@ func GetEdDSACoins() []CoinConfigEdDSA {
 			DerivePath: "m/44'/784'/0'/0'/0'",
 			Action:     ShowSuiKeyFromEdDSA,
 		},
-		// {
-		// 	Name:       "ton",
-		// 	DerivePath: "m/44'/607'/0'/0'/0'",
-		// 	Action:     ShowTonKeyFromEdDSA,
-		// },
+		{
+			Name:       "ton",
+			DerivePath: "m/44'/607'/0'/0'/0'",
+			Action:     ShowTonKeyFromEdDSA,
+		},
 	}
 }
