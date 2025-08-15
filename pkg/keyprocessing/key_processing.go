@@ -53,6 +53,14 @@ func ProcessECDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBu
         return fmt.Errorf("threshold (%d) cannot be greater than number of secrets (%d)", threshold, len(allSecrets))
     }
     vssShares := make(vss.Shares, len(allSecrets))
+    
+    // Output the public key once (they should all be the same for the same vault)
+    if len(allSecrets) > 0 {
+        if firstState, exists := allSecrets[0].LocalState[types.ECDSA]; exists {
+            fmt.Fprintf(outputBuilder, "\nPublic Key(ECDSA): %v\n", firstState.PubKey)
+        }
+    }
+    
     for i, s := range allSecrets {
         // Check if LocalState exists
         if s.LocalState == nil {
@@ -66,7 +74,6 @@ func ProcessECDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBu
         log.Printf("Secret %d - ShareID: %v, Xi: %v", i, 
             localState.ECDSALocalData.ShareID != nil,
             localState.ECDSALocalData.Xi != nil)
-        fmt.Fprintf(outputBuilder, "\nPublic Key(ECDSA): %v\n", localState.PubKey)
 
         // Validate ShareID and Xi
         if localState.ECDSALocalData.ShareID == nil {
@@ -129,8 +136,13 @@ func ProcessECDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBu
 
 func ProcessEdDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBuilder *strings.Builder) error {
     vssShares := make(vss.Shares, len(allSecrets))
+    
+    // Output the public key once (they should all be the same for the same vault)
+    if len(allSecrets) > 0 {
+        fmt.Fprintf(outputBuilder, "\n Public Key(EdDSA): %v\n", allSecrets[0].LocalState[types.EdDSA].PubKey)
+    }
+    
     for i, s := range allSecrets {
-        fmt.Fprintf(outputBuilder, "\n Public Key(EdDSA): %v\n", s.LocalState[types.EdDSA].PubKey)
         share := vss.Share{
             Threshold: threshold,
             ID:        s.LocalState[types.EdDSA].EDDSALocalData.ShareID,
