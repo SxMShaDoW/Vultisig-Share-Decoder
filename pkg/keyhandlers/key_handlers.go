@@ -412,7 +412,7 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	}
 
 	// Set wallet parameters for mainnet V3R2 wallet
-	ver := wallet.V3R2
+	ver := wallet.V4R2
 	workchain := 0                         // Mainnet workchain
 	networkGlobalID := int32(-239)         // Mainnet global ID
 	subWalletId := uint32(698983191)       // Default subWalletId for v3R2
