@@ -24,6 +24,7 @@ import (
 	"main/tss"
 	"github.com/btcsuite/btcutil/base58"
 	"golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/sha3"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -347,6 +348,50 @@ func ShowSuiKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	return nil
 }
 
+// ShowTronKeyFromEdDSA shows Tron key information from raw Ed25519 keys
+func ShowTronKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
+	// For Tron, we need to create an address from the public key using Keccak256 hashing
+	// Tron address = version_byte (0x41) + Keccak256(public_key)[12:32] + checksum
+	
+	// Hash the public key using Keccak256 (SHA3)
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write(eddsaPublicKeyBytes)
+	pubKeyHash := hash.Sum(nil)
+	
+	// Take the last 20 bytes of the hash
+	addressBytes := pubKeyHash[12:32]
+	
+	// Add Tron version byte (0x41 for mainnet)
+	versionedAddress := make([]byte, 21)
+	versionedAddress[0] = 0x41 // Tron mainnet version byte
+	copy(versionedAddress[1:], addressBytes)
+	
+	// Calculate checksum (double SHA256 of versioned address, take first 4 bytes)
+	checksum1 := sha3.NewLegacyKeccak256()
+	checksum1.Write(versionedAddress)
+	hash1 := checksum1.Sum(nil)
+	
+	checksum2 := sha3.NewLegacyKeccak256()
+	checksum2.Write(hash1)
+	hash2 := checksum2.Sum(nil)
+	
+	checksum := hash2[:4]
+	
+	// Combine versioned address + checksum
+	fullAddress := make([]byte, 25)
+	copy(fullAddress[:21], versionedAddress)
+	copy(fullAddress[21:], checksum)
+	
+	// Encode to Base58 for final Tron address
+	tronAddress := base58.Encode(fullAddress)
+
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for tron:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for tron:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
+	fmt.Fprintf(outputBuilder, "\ntron address:%s\n", tronAddress)
+
+	return nil
+}
+
 // GetEdDSACoins returns coins that use EdDSA
 func GetEdDSACoins() []CoinConfigEdDSA {
 	return []CoinConfigEdDSA{
@@ -359,6 +404,11 @@ func GetEdDSACoins() []CoinConfigEdDSA {
 			Name:       "sui",
 			DerivePath: "m/44'/784'/0'/0'/0'",
 			Action:     ShowSuiKeyFromEdDSA,
+		},
+		{
+			Name:       "tron",
+			DerivePath: "m/44'/195'/0'/0/0",
+			Action:     ShowTronKeyFromEdDSA,
 		},
 	}
 }
