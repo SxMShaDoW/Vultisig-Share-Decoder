@@ -28,7 +28,6 @@ import (
 	"golang.org/x/crypto/sha3"
 	"crypto/sha256"
 	"github.com/tonkeeper/tongo/wallet"
-	"github.com/tonkeeper/tongo/liteapi"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -404,31 +403,34 @@ func ShowTronKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *stri
 
 // ShowTonKeyFromEdDSA shows TON key information from raw Ed25519 keys
 func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
-	// Validate private key length
+	// Validate key lengths
 	if len(eddsaPrivateKeyBytes) != 32 {
 		return fmt.Errorf("private key must be 32 bytes, got %d", len(eddsaPrivateKeyBytes))
 	}
-
-	// Create TON client (using testnet for this example, but address generation doesn't depend on network)
-	client, err := liteapi.NewClientWithDefaultTestnet()
-	if err != nil {
-		return nil
+	if len(eddsaPublicKeyBytes) != 32 {
+		return fmt.Errorf("public key must be 32 bytes, got %d", len(eddsaPublicKeyBytes))
 	}
 
-	// Create Ed25519 private key from seed
-	privateKey := ed25519.NewKeyFromSeed(eddsaPrivateKeyBytes)
+	// Set wallet parameters for mainnet V3R2 wallet
+	ver := wallet.V3R2
+	workchain := 0                         // Mainnet workchain
+	networkGlobalID := int32(-239)         // Mainnet global ID
+	subWalletId := uint32(698983191)       // Default subWalletId for v3R2
 
-	// Create wallet using the correct API
-	w, err := wallet.New(privateKey, wallet.V3R2, client)
+	// Generate address using the improved offline method
+	addr, err := wallet.GenerateWalletAddress(
+		ed25519.PublicKey(eddsaPublicKeyBytes),
+		ver,
+		&networkGlobalID,
+		workchain,
+		&subWalletId,
+	)
 	if err != nil {
-		return fmt.Errorf("unable to create TON wallet: %w", err)
+		return fmt.Errorf("error generating wallet address: %w", err)
 	}
 
-	// Get the address
-	addr := w.GetAddress()
-
-	// Convert to human-readable format
-	tonAddress := addr.ToHuman(false, false)
+	// Convert to user-friendly, non-bounceable, mainnet format
+	tonAddress := addr.ToHuman(false, false) // bounceable=false, testnet=false
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
