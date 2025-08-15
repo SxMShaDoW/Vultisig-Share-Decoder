@@ -83,14 +83,36 @@ func main() {
             return fmt.Sprintf("Error decoding chain code hex: %v", err)
         }
 
-        // Get all supported coins
-        supportedCoins := keyhandlers.GetSupportedCoins()
-
-        // Process the root key for all coins
         var outputBuilder strings.Builder
-        err = keyhandlers.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, supportedCoins, &outputBuilder)
+
+        // Get ECDSA supported coins and process them
+        ecdsaCoins := keyhandlers.GetSupportedCoins()
+        err = keyhandlers.ProcessRootKeyForCoins(rootPrivateKeyBytes, rootChainCodeBytes, ecdsaCoins, &outputBuilder)
         if err != nil {
-            return fmt.Sprintf("Error processing keys: %v", err)
+            return fmt.Sprintf("Error processing ECDSA keys: %v", err)
+        }
+
+        // Check if EdDSA keys are available (args[2] and args[3] should be EdDSA private and public key)
+        if len(args) >= 4 && !args[2].IsNull() && !args[3].IsNull() {
+            eddsaPrivateKeyHex := args[2].String()
+            eddsaPublicKeyHex := args[3].String()
+            
+            eddsaPrivateKeyBytes, err := hex.DecodeString(eddsaPrivateKeyHex)
+            if err != nil {
+                return fmt.Sprintf("Error decoding EdDSA private key hex: %v", err)
+            }
+            
+            eddsaPublicKeyBytes, err := hex.DecodeString(eddsaPublicKeyHex)
+            if err != nil {
+                return fmt.Sprintf("Error decoding EdDSA public key hex: %v", err)
+            }
+
+            // Get EdDSA coins and process them
+            eddsaCoins := keyhandlers.GetEdDSACoins()
+            err = keyhandlers.ProcessEdDSAKeyForCoins(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, eddsaCoins, &outputBuilder)
+            if err != nil {
+                return fmt.Sprintf("Error processing EdDSA keys: %v", err)
+            }
         }
 
         return outputBuilder.String()

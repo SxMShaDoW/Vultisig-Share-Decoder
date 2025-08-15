@@ -89,5 +89,10 @@ func GetSupportedCoins() []CoinConfig {
 			DerivePath: "m/44'/60'/0'/0/0",
 			Action:     ShowEthereumKey,
 		},
+		{
+			Name:       "solana",
+			DerivePath: "m/44'/501'/0'/0'",
+			Action:     ShowSolanaKey,
+		},
 	}
 }
