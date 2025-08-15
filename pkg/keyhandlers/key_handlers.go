@@ -408,10 +408,8 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	}
 
 	// Create wallet v3R2 (most common wallet version)
-	w, err := wallet.New(eddsaPublicKeyBytes, wallet.V3R2, 0)
-	if err != nil {
-		return fmt.Errorf("error creating TON wallet: %w", err)
-	}
+	// Use the proper constructor for wallet v3R2
+	w := wallet.NewWalletV3R2(0, eddsaPublicKeyBytes)
 
 	// Get the address
 	addr := w.GetAddress()
