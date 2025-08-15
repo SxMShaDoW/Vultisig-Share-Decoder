@@ -96,5 +96,10 @@ func GetSupportedCoins() []CoinConfig {
 			DerivePath: "m/44'/60'/0'/0/0",
 			Action:     ShowEthereumKey,
 		},
+		{
+			Name:       "tron",
+			DerivePath: "m/44'/195'/0'/0/0",
+			Action:     ShowTronKey,
+		},
 	}
 }
