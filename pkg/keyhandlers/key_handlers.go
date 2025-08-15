@@ -402,33 +402,30 @@ func ShowTronKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *stri
 
 // ShowTonKeyFromEdDSA shows TON key information from raw Ed25519 keys
 func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
-	// TON address generation from Ed25519 public key:
-	// 1. Create address using workchain (0) + account ID (hash of public key)
-	// 2. Hash the public key with SHA256
-	// 3. Take the hash as the account ID
-	// 4. Create TON address format with proper encoding
+	// TON address generation follows a specific format:
+	// 1. Create state init for wallet contract
+	// 2. Calculate address from state init hash
+	// 3. Format as user-friendly address
 	
-	// Hash the public key using SHA256
+	// For TON, we need to create a wallet contract state init
+	// This is a simplified version - in practice, TON wallets use specific contract code
+	
+	// Create account ID from public key hash
 	hash := sha256.Sum256(eddsaPublicKeyBytes)
 	
-	// TON uses workchain 0 for regular addresses
-	// Create the raw address (1 byte workchain + 32 bytes account ID)
-	rawAddress := make([]byte, 33)
-	rawAddress[0] = 0x00 // workchain 0
-	copy(rawAddress[1:], hash[:])
+	// TON address structure: tag (0x11 for bounceable) + workchain (1 byte) + address (32 bytes) + checksum (2 bytes)
+	addressData := make([]byte, 34)
+	addressData[0] = 0x11 // Bounceable address tag
+	addressData[1] = 0x00 // Workchain 0
+	copy(addressData[2:], hash[:32]) // Use hash as address
 	
-	// Calculate checksum using CRC16-CCITT (not CRC32)
-	// TON uses CRC16 for address checksums
-	checksum := crc16CCITT(rawAddress)
-	
-	// Create final address with checksum (33 bytes address + 2 bytes checksum)
-	fullAddress := make([]byte, 35)
-	copy(fullAddress[:33], rawAddress)
-	fullAddress[33] = byte(checksum >> 8)
-	fullAddress[34] = byte(checksum & 0xFF)
+	// Calculate CRC16 checksum
+	checksum := crc16CCITT(addressData[:34])
+	addressData[32] = byte(checksum >> 8)
+	addressData[33] = byte(checksum & 0xFF)
 	
 	// Encode with Base64 URL-safe encoding (TON standard)
-	tonAddress := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(fullAddress)
+	tonAddress := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(addressData)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
