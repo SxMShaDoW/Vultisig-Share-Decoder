@@ -26,6 +26,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
 	"crypto/sha256"
+	"hash/crc32"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -399,6 +400,47 @@ func ShowTronKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *stri
 	return nil
 }
 
+// ShowTonKeyFromEdDSA shows TON key information from raw Ed25519 keys
+func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte, outputBuilder *strings.Builder) error {
+	// TON address generation from Ed25519 public key:
+	// 1. Create address using workchain (0) + account ID (hash of public key)
+	// 2. Hash the public key with SHA256
+	// 3. Take the hash as the account ID
+	// 4. Create TON address format
+	
+	// Hash the public key using SHA256
+	hash := sha256.Sum256(eddsaPublicKeyBytes)
+	
+	// TON uses workchain 0 for regular addresses
+	// The address format combines workchain and account ID
+	workchain := byte(0)
+	
+	// Create the raw address (workchain + account ID)
+	rawAddress := make([]byte, 33)
+	rawAddress[0] = workchain
+	copy(rawAddress[1:], hash[:])
+	
+	// Calculate checksum using CRC32
+	checksum := crc32.ChecksumIEEE(rawAddress[:33])
+	
+	// Create final address with checksum
+	fullAddress := make([]byte, 37)
+	copy(fullAddress[:33], rawAddress)
+	fullAddress[33] = byte(checksum >> 24)
+	fullAddress[34] = byte(checksum >> 16)
+	fullAddress[35] = byte(checksum >> 8)
+	fullAddress[36] = byte(checksum)
+	
+	// Encode with Base64 URL-safe encoding (TON standard)
+	tonAddress := base58.Encode(fullAddress)
+
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 private key for ton:%s\n", hex.EncodeToString(eddsaPrivateKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for ton:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
+	fmt.Fprintf(outputBuilder, "\nton address:%s\n", tonAddress)
+
+	return nil
+}
+
 // GetEdDSACoins returns coins that use EdDSA
 func GetEdDSACoins() []CoinConfigEdDSA {
 	return []CoinConfigEdDSA{
@@ -411,6 +453,11 @@ func GetEdDSACoins() []CoinConfigEdDSA {
 			Name:       "sui",
 			DerivePath: "m/44'/784'/0'/0'/0'",
 			Action:     ShowSuiKeyFromEdDSA,
+		},
+		{
+			Name:       "ton",
+			DerivePath: "m/44'/607'/0'/0'/0'",
+			Action:     ShowTonKeyFromEdDSA,
 		},
 	}
 }
