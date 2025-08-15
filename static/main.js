@@ -618,7 +618,8 @@ function parseOutput(rawOutput) {
             currentChain = trimmedLine
                 .replace('Recovering ', '')
                 .replace(' key....', '')
-                .trim();
+                .trim()
+                .toLowerCase();
         }
 
         // Parse WIF private keys
@@ -637,7 +638,8 @@ function parseOutput(rawOutput) {
 
         // Parse private keys
         if (trimmedLine.startsWith('hex encoded private key for') || 
-            trimmedLine.startsWith('hex encoded non-hardened private key for')) {
+            trimmedLine.startsWith('hex encoded non-hardened private key for') ||
+            trimmedLine.startsWith('hex encoded Ed25519 private key for')) {
             const parts = trimmedLine.split(':');
             if (parts.length === 2) {
                 let chain;
@@ -650,6 +652,12 @@ function parseOutput(rawOutput) {
                 } else if (trimmedLine.startsWith('hex encoded non-hardened private key for')) {
                     chain = trimmedLine
                         .replace('hex encoded non-hardened private key for ', '')
+                        .split(':')[0]
+                        .trim()
+                        .toLowerCase();
+                } else if (trimmedLine.startsWith('hex encoded Ed25519 private key for')) {
+                    chain = trimmedLine
+                        .replace('hex encoded Ed25519 private key for ', '')
                         .split(':')[0]
                         .trim()
                         .toLowerCase();
@@ -668,6 +676,11 @@ function parseOutput(rawOutput) {
         // Store ethereum address specifically
         if (trimmedLine.startsWith('ethereum address:')) {
             decoded.Addresses['ethereum'] = trimmedLine.split(':')[1].trim();
+        }
+
+        // Store solana address specifically
+        if (trimmedLine.startsWith('solana address:')) {
+            decoded.Addresses['solana'] = trimmedLine.split(':')[1].trim();
         }
     }
 
