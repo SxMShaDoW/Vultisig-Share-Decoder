@@ -310,7 +310,8 @@ func ShowSolanaKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *st
 	}
 	
 	// Create Ed25519 key pair from seed
-	edPrivateKey := edwards.NewPrivateKey(privateKeyBytes)
+	privateKeyBigInt := new(big.Int).SetBytes(privateKeyBytes)
+	edPrivateKey := edwards.NewPrivateKey(privateKeyBigInt)
 	edPublicKey := edPrivateKey.PubKey()
 	
 	publicKeyBytes := edPublicKey.Serialize()
