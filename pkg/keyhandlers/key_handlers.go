@@ -466,10 +466,10 @@ func GetEdDSACoins() []CoinConfigEdDSA {
 			DerivePath: "m/44'/784'/0'/0'/0'",
 			Action:     ShowSuiKeyFromEdDSA,
 		},
-		{
-			Name:       "ton",
-			DerivePath: "m/44'/607'/0'/0'/0'",
-			Action:     ShowTonKeyFromEdDSA,
-		},
+		// {
+		// 	Name:       "ton",
+		// 	DerivePath: "m/44'/607'/0'/0'/0'",
+		// 	Action:     ShowTonKeyFromEdDSA,
+		// },
 	}
 }
