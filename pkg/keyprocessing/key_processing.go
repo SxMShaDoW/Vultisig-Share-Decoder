@@ -139,7 +139,7 @@ func ProcessEdDSAKeys(threshold int, allSecrets []types.TempLocalState, outputBu
     
     // Output the public key once (they should all be the same for the same vault)
     if len(allSecrets) > 0 {
-        fmt.Fprintf(outputBuilder, "\n Public Key(EdDSA): %v\n", allSecrets[0].LocalState[types.EdDSA].PubKey)
+        fmt.Fprintf(outputBuilder, "\nPublic Key(EdDSA): %v\n", allSecrets[0].LocalState[types.EdDSA].PubKey)
     }
     
     for i, s := range allSecrets {
