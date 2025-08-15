@@ -295,7 +295,7 @@ func ProcessEdDSAKeyForCoins(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []
 
 	// Process each EdDSA coin configuration
 	for _, coin := range coinConfigs {
-		fmt.Fprintf(outputBuilder, "\nRecovering EDDSA %s key....\n", coin.Name)
+		fmt.Fprintf(outputBuilder, "\nRecovering %s key....\n", coin.Name)
 
 		// Call the coin-specific action function
 		if err := coin.Action(eddsaPrivateKeyBytes, eddsaPublicKeyBytes, outputBuilder); err != nil {
@@ -315,15 +315,6 @@ func ShowSolanaKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []b
 	fmt.Fprintf(outputBuilder, "\nhex encoded Ed25519 public key for solana:%s\n", hex.EncodeToString(eddsaPublicKeyBytes))
 	fmt.Fprintf(outputBuilder, "\nsolana address:%s\n", solanaAddress)
 
-	return nil
-}
-
-// ShowSolanaKey shows Solana key information from ECDSA-derived keys (for compatibility with CoinConfig)
-func ShowSolanaKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *strings.Builder) error {
-	// This function is used when processing ECDSA-derived keys through the standard coin pipeline
-	// For actual EdDSA Solana keys, use ShowSolanaKeyFromEdDSA directly
-	fmt.Fprintf(outputBuilder, "\nNote: Solana should use EdDSA keys, not ECDSA-derived keys\n")
-	fmt.Fprintf(outputBuilder, "\nECDSA-derived extended private key for solana:%s\n", extendedPrivateKey.String())
 	return nil
 }
 
