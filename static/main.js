@@ -19,13 +19,22 @@ import { decryptWithAesGcm, fromBase64 } from './aes_gcm.js';
 // Initialize WASM modules
 const go = new Go();
 
-// Initialize main.wasm (Go WASM)
-const initMainWasm = WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
-    .then((result) => {
-        go.run(result.instance);
-        debugLog("Main WASM initialized successfully");
-        return result;
-    });
+// Initialize main.wasm (fetched as gzip-compressed, decompressed client-side)
+const initMainWasm = (async () => {
+    debugLog("Fetching compressed WASM (main.wasm.gz)...");
+    const response = await fetch("main.wasm.gz");
+    if (!response.ok) {
+        throw new Error(`Failed to fetch main.wasm.gz: ${response.status}`);
+    }
+    const ds = new DecompressionStream("gzip");
+    const decompressed = response.body.pipeThrough(ds);
+    const wasmBytes = await new Response(decompressed).arrayBuffer();
+    debugLog(`Decompressed WASM: ${(wasmBytes.byteLength / 1024 / 1024).toFixed(1)} MiB`);
+    const result = await WebAssembly.instantiate(wasmBytes, go.importObject);
+    go.run(result.instance);
+    debugLog("Main WASM initialized successfully");
+    return result;
+})();
 
 // Initialize vs_wasm_bg.wasm (additional WASM module)
 const initVsWasm = (async () => {

@@ -20,3 +20,6 @@ gopath/
 
 # Go workspace file
 go.work
+
+# Uncompressed WASM (only commit the .gz version)
+static/main.wasm
