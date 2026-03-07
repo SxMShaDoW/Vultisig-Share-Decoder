@@ -22,9 +22,13 @@ pages: wasm derive
 
 test:
 	@echo "Running Go tests..."
-	go test ./...
+	go test $$(go list ./... | grep -v /internal/recovery)
 	@echo "Running JS derive tests..."
 	bun run src/derive.test.js
+
+test-cgo:
+	@echo "Running all Go tests (requires CGo + libgodkls)..."
+	go test ./...
 
 check:
 	@echo "Checking code formatting..."
@@ -37,4 +41,4 @@ clean:
 	rm -rf dist/
 	rm -f static/main.wasm static/main.wasm.gz static/derive.js
 
-.PHONY: all cli wasm derive pages test check clean
+.PHONY: all cli wasm derive pages test test-cgo check clean
