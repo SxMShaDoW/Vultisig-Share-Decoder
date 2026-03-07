@@ -17,6 +17,8 @@ builds:
     ignore:
       - goos: darwin
         goarch: amd64
+      - goos: linux
+        goarch: arm64
 
 archives:
   - id: vsd

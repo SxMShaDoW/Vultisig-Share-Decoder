@@ -17,9 +17,6 @@ jobs:
           - os: ubuntu-latest
             goos: linux
             goarch: amd64
-          - os: ubuntu-24.04-arm
-            goos: linux
-            goarch: arm64
           - os: macos-latest
             goos: darwin
             goarch: arm64
@@ -31,19 +28,6 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Fix go-wrappers library path (linux/arm64)
-        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
-        run: |
-          WRAPPERS_DIR=$(go env GOMODCACHE)/github.com/vultisig/go-wrappers@*/includes
-          for dir in $WRAPPERS_DIR; do
-            chmod -R u+w "$dir/linux"
-            cp -f "$dir/linux-arm64/libgodkls.so" "$dir/linux/libgodkls.so"
-            cp -f "$dir/linux-arm64/libgoschnorr.so" "$dir/linux/libgoschnorr.so"
-          done
 
       - name: Build binary
         env:
