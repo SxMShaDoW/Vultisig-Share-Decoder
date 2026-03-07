@@ -7,6 +7,8 @@
 *.dll
 *.so
 *.dylib
+dist/cli
+cli
 
 # Test binary, built with `go test -c`
 *.test
@@ -30,3 +32,6 @@ bun.lock
 
 # Obsidian config (local-only)
 vault/.obsidian/
+
+# Claude Sessions (local-only)
+Claude-Sessions/

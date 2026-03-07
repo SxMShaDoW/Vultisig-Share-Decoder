@@ -3,7 +3,7 @@ package format
 import (
 	"encoding/json"
 
-	"github.com/vultisig/vsd/internal/recovery"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/recovery"
 )
 
 func JSON(r *recovery.RecoveryResult) (string, error) {

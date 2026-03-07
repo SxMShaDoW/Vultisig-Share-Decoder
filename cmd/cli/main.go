@@ -6,9 +6,9 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/vultisig/vsd/internal/format"
-	"github.com/vultisig/vsd/internal/recovery"
-	"github.com/vultisig/vsd/internal/vault"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/format"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/recovery"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/vault"
 )
 
 func main() {

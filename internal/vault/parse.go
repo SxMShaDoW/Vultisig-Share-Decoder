@@ -10,7 +10,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
 
-	"github.com/vultisig/vsd/internal/tss"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/tss"
 )
 
 func ReadFileContent(path string) ([]byte, error) {

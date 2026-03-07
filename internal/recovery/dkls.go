@@ -6,13 +6,17 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"strings"
 
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/decred/dcrd/dcrec/edwards/v2"
 	dklsSession "github.com/vultisig/go-wrappers/go-dkls/sessions"
 	schnorrSession "github.com/vultisig/go-wrappers/go-schnorr/sessions"
 
-	"github.com/vultisig/vsd/internal/derive"
-	"github.com/vultisig/vsd/internal/vault"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/derive"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/vault"
 )
 
 type dklsKeyshares struct {
@@ -54,10 +58,21 @@ func recoverDKLS(inputs []vault.FileInput, passwords []string) (*RecoveryResult,
 	}
 
 	pubKeyHex := hex.EncodeToString(ecdsaResult.PublicKey)
+
+	net := &chaincfg.MainNetParams
+	extKey := hdkeychain.NewExtendedKey(
+		net.HDPrivateKeyID[:],
+		ecdsaResult.PrivateKey,
+		ecdsaResult.ChainCode,
+		[]byte{0x00, 0x00, 0x00, 0x00},
+		0, 0, true,
+	)
+
 	result.RootKeyInfo = &RootKeyInfo{
 		HexPubKeyECDSA:  pubKeyHex,
 		HexPrivKeyECDSA: hex.EncodeToString(ecdsaResult.PrivateKey),
 		ChainCode:       hex.EncodeToString(ecdsaResult.ChainCode),
+		ExtendedPrivKey: extKey.String(),
 	}
 	result.PublicKeys.ECDSA = pubKeyHex
 
@@ -69,10 +84,20 @@ func recoverDKLS(inputs []vault.FileInput, passwords []string) (*RecoveryResult,
 	if len(keyshares.EdDSAKeyshares) >= 2 {
 		eddsaResult, err := exportEdDSAKey(keyshares.EdDSAKeyshares, keyshares.PartyIDs)
 		if err == nil {
-			result.PublicKeys.EdDSA = hex.EncodeToString(eddsaResult.PublicKey)
-			eddsaKeys, err := derive.DeriveEdDSACoins(eddsaResult.PrivateKey, eddsaResult.PublicKey)
+			scalarBytes := reduceEdDSAScalar(eddsaResult.PrivateKey)
+			privKey, pubKey, err := edwards.PrivKeyFromScalar(scalarBytes)
 			if err == nil {
-				result.EdDSAKeys = eddsaKeys
+				privKeyBytes := privKey.Serialize()
+				pubKeyBytes := pubKey.Serialize()
+				eddsaPubHex := hex.EncodeToString(pubKeyBytes)
+				eddsaPrivHex := hex.EncodeToString(privKeyBytes)
+				result.PublicKeys.EdDSA = eddsaPubHex
+				result.RootKeyInfo.HexPubKeyEdDSA = eddsaPubHex
+				result.RootKeyInfo.HexPrivKeyEdDSA = eddsaPrivHex
+				eddsaKeys, err := derive.DeriveEdDSACoins(privKeyBytes, pubKeyBytes)
+				if err == nil {
+					result.EdDSAKeys = eddsaKeys
+				}
 			}
 		}
 	}
@@ -259,6 +284,19 @@ func exportEdDSAKey(keyshareDataList [][]byte, partyIDs []string) (*exportResult
 		PrivateKey: privateKey,
 		PublicKey:  publicKey,
 	}, nil
+}
+
+var ed25519Order, _ = new(big.Int).SetString("7237005577332262213973186563042994240857116359379907606001950938285454250989", 10)
+
+func reduceEdDSAScalar(raw []byte) []byte {
+	scalar := new(big.Int).SetBytes(raw)
+	if scalar.Cmp(ed25519Order) >= 0 {
+		scalar.Mod(scalar, ed25519Order)
+	}
+	reduced := scalar.Bytes()
+	var buf [32]byte
+	copy(buf[32-len(reduced):], reduced)
+	return buf[:]
 }
 
 func decodeKeyshare(keyshareStr string) ([]byte, error) {

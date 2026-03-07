@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vultisig/vsd/internal/recovery"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/recovery"
 )
 
 func Text(r *recovery.RecoveryResult) string {
@@ -25,6 +25,12 @@ func Text(r *recovery.RecoveryResult) string {
 		fmt.Fprintf(&b, "Chain Code:        %s\n", r.RootKeyInfo.ChainCode)
 		if r.RootKeyInfo.ExtendedPrivKey != "" {
 			fmt.Fprintf(&b, "Extended Priv Key: %s\n", r.RootKeyInfo.ExtendedPrivKey)
+		}
+		if r.RootKeyInfo.HexPubKeyEdDSA != "" {
+			fmt.Fprintf(&b, "EdDSA Public Key:  %s\n", r.RootKeyInfo.HexPubKeyEdDSA)
+		}
+		if r.RootKeyInfo.HexPrivKeyEdDSA != "" {
+			fmt.Fprintf(&b, "EdDSA Private Key: %s\n", r.RootKeyInfo.HexPrivKeyEdDSA)
 		}
 	}
 

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/vultisig/vsd/internal/vault"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/vault"
 )
 
 func readTestFile(t *testing.T, path string) []byte {
@@ -37,7 +37,7 @@ func TestRecoverDKLS(t *testing.T) {
 	if result.PublicKeys.ECDSA != "0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b" {
 		t.Errorf("ECDSA pubkey mismatch: %s", result.PublicKeys.ECDSA)
 	}
-	if result.PublicKeys.EdDSA != "20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9" {
+	if result.PublicKeys.EdDSA != "5e5ce6316a1047af3bcb228ac4f8d04ef718a9a0d6463fa6d2f62817939ccfe9" {
 		t.Errorf("EdDSA pubkey mismatch: %s", result.PublicKeys.EdDSA)
 	}
 
@@ -63,7 +63,7 @@ func TestRecoverDKLS(t *testing.T) {
 			solAddr = k.Address
 		}
 	}
-	if solAddr != "3DPAkfuk5bkh1c1Pg5GN57Gr6cSJsZHVBcJLTFMapmA8" {
+	if solAddr != "7MMV5XnYP2ZT5AuXFuaH1Yt3Hv4X4gMYiZkA7vBUFiN4" {
 		t.Errorf("solana address mismatch: %s", solAddr)
 	}
 }
@@ -111,6 +111,16 @@ func TestRecoverGG20TwoShare(t *testing.T) {
 	}
 	if len(result.EdDSAKeys) == 0 {
 		t.Fatal("expected EdDSA keys")
+	}
+
+	var solAddr string
+	for _, k := range result.EdDSAKeys {
+		if k.Name == "solana" {
+			solAddr = k.Address
+		}
+	}
+	if solAddr != "EPEg1C2pEwiEbPaBTuyydnvGpZoa6y3iXVVNzv7JYT8H" {
+		t.Errorf("GG20 solana address mismatch: %s", solAddr)
 	}
 }
 

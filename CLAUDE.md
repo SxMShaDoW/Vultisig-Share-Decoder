@@ -36,7 +36,7 @@ make clean       # Remove build artifacts
 
 ### Module
 
-`github.com/vultisig/vsd` — all internal packages under `internal/`.
+`github.com/SxMShaDoW/Vultisig-Share-Decoder` — all internal packages under `internal/`.
 
 ### Build Tags
 

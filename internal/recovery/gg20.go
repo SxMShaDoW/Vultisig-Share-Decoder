@@ -11,8 +11,8 @@ import (
 	edwards "github.com/decred/dcrd/dcrec/edwards/v2"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 
-	"github.com/vultisig/vsd/internal/derive"
-	"github.com/vultisig/vsd/internal/vault"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/derive"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/vault"
 )
 
 func recoverGG20(inputs []vault.FileInput, passwords []string) (*RecoveryResult, error) {
@@ -167,7 +167,13 @@ func processGG20EdDSA(threshold int, allSecrets []vault.TempLocalState, result *
 	pubKeyBytes := publicKey.Serialize()
 	privKeyBytes := privateKey.Serialize()
 
-	result.PublicKeys.EdDSA = hex.EncodeToString(pubKeyBytes)
+	eddsaPubHex := hex.EncodeToString(pubKeyBytes)
+	eddsaPrivHex := hex.EncodeToString(privKeyBytes)
+	result.PublicKeys.EdDSA = eddsaPubHex
+	if result.RootKeyInfo != nil {
+		result.RootKeyInfo.HexPubKeyEdDSA = eddsaPubHex
+		result.RootKeyInfo.HexPrivKeyEdDSA = eddsaPrivHex
+	}
 
 	eddsaKeys, err := derive.DeriveEdDSACoins(privKeyBytes, pubKeyBytes)
 	if err != nil {

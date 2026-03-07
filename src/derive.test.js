@@ -32,7 +32,7 @@ console.assert(
 console.log(`THOR: ${thor.address} ✓`);
 
 // MayaChain
-const maya = byName.mayachain;
+const maya = byName.maya;
 console.assert(
   maya.address === "maya167h7nq5wuklekdeyrmsgy2p6gc3acaezpcszk0",
   `MAYA: ${maya.address}`,
@@ -48,25 +48,33 @@ const edByName = Object.fromEntries(eddsaKeys.map((k) => [k.name, k]));
 
 console.log(`EdDSA coins derived: ${eddsaKeys.length}`);
 
-// Solana
+// Solana (scalar is reduced mod L, so address differs from raw pubkey)
 const sol = edByName.solana;
 console.assert(
-  sol.address === "3DPAkfuk5bkh1c1Pg5GN57Gr6cSJsZHVBcJLTFMapmA8",
+  sol.address === "7MMV5XnYP2ZT5AuXFuaH1Yt3Hv4X4gMYiZkA7vBUFiN4",
   `SOL: ${sol.address}`,
+);
+console.assert(
+  sol.hexPrivateKey === "033da00cb116e47317d8d0fdf2629f10bdf1e812306543ef4b77bdc69faa528c",
+  `SOL privkey: ${sol.hexPrivateKey}`,
 );
 console.log(`SOL: ${sol.address} ✓`);
 
 // TON
 const ton = edByName.ton;
 console.assert(
-  ton.address === "UQBzI_4nPOWMLkQFIjs7c76O43TGJhOrcJY7Zq5Yj-OWwKhm",
+  ton.address === "UQC-rEgEkPrKDfMOz0YfRrHfUN83GxvUhZCMKqSgGVwe-liH",
   `TON: ${ton.address}`,
 );
 console.log(`TON: ${ton.address} ✓`);
 
 // SUI
 const sui = edByName.sui;
-console.log(`SUI: ${sui.address}`);
+console.assert(
+  sui.address === "0x8237f0a3c04ae7498c6380990f7d37e5f5ed243bd382c7a3bbf135a2258fc59d",
+  `SUI: ${sui.address}`,
+);
+console.log(`SUI: ${sui.address} ✓`);
 
 // Print all EVM chains (should all have same address as ETH)
 for (const name of ["avalanche", "bsc", "arbitrum", "base", "optimism", "polygon"]) {

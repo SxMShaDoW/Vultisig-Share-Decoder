@@ -366,6 +366,44 @@ function keyRow(label, value, sensitive = false) {
     </div>`;
 }
 
+const COIN_ICONS = {
+  bitcoin: "bitcoin",
+  bitcoinCash: "bitcoin-cash",
+  "bitcoin cash": "bitcoin-cash",
+  dogecoin: "dogecoin",
+  litecoin: "litecoin",
+  dash: "dash",
+  thorchain: "thorchain",
+  maya: "maya",
+  mayachain: "maya",
+  cosmos: "cosmos",
+  osmosis: "cosmos",
+  kujira: "kujira",
+  dydx: "dydx",
+  terra: "terra",
+  "terra classic": "luna-classic",
+  noble: "cosmos",
+  akash: "cosmos",
+  ethereum: "ethereum",
+  avalanche: "ethereum",
+  bsc: "ethereum",
+  arbitrum: "ethereum",
+  base: "ethereum",
+  optimism: "ethereum",
+  polygon: "ethereum",
+  blast: "ethereum",
+  cronos: "ethereum",
+  zksync: "ethereum",
+  mantle: "ethereum",
+  hyperliquid: "ethereum",
+  sei: "ethereum",
+  tron: "tron",
+  ripple: "ethereum",
+  solana: "solana",
+  sui: "sui",
+  ton: "ton",
+};
+
 function coinCard(coin) {
   const name = coin.name || coin.Name || "";
   const path = coin.derivePath || coin.DerivePath || "";
@@ -374,9 +412,13 @@ function coinCard(coin) {
   const pubKey = coin.hexPublicKey || coin.HexPublicKey || "";
   const wif = coin.wifPrivateKey || coin.WIFPrivateKey || "";
 
+  const iconFile = COIN_ICONS[name.toLowerCase()] || COIN_ICONS[name];
+  const iconHtml = iconFile
+    ? `<img class="coin-icon" src="icons/${iconFile}.png" alt="" width="20" height="20">`
+    : "";
   let html = `<div class="coin-card">
         <div class="coin-header">
-            <span class="coin-name">${escapeHtml(name)}</span>
+            <span class="coin-name">${iconHtml}${escapeHtml(name)}</span>
             <span class="coin-path">${escapeHtml(path)}</span>
         </div>`;
 

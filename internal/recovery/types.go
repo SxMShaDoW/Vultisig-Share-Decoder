@@ -1,14 +1,16 @@
 package recovery
 
 import (
-	"github.com/vultisig/vsd/internal/derive"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/derive"
 )
 
 type RootKeyInfo struct {
 	HexPubKeyECDSA  string `json:"hexPubKeyECDSA"`
 	HexPrivKeyECDSA string `json:"hexPrivKeyECDSA"`
 	ChainCode       string `json:"chainCode"`
-	ExtendedPrivKey string `json:"extendedPrivateKey"`
+	ExtendedPrivKey string `json:"extendedPrivateKey,omitempty"`
+	HexPubKeyEdDSA  string `json:"hexPubKeyEdDSA,omitempty"`
+	HexPrivKeyEdDSA string `json:"hexPrivKeyEdDSA,omitempty"`
 }
 
 type ShareDetail struct {

@@ -1,4 +1,4 @@
-module github.com/vultisig/vsd
+module github.com/SxMShaDoW/Vultisig-Share-Decoder
 
 go 1.25
 

@@ -1,5 +1,6 @@
 import { HDKey } from "@scure/bip32";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { ed25519 } from "@noble/curves/ed25519.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { ripemd160 } from "@noble/hashes/legacy.js";
 import { keccak_256 } from "@noble/hashes/sha3.js";
@@ -287,7 +288,7 @@ const ECDSA_COINS = [
     derive: (p, pk) => deriveCosmosAddress(pk, "thor"),
   },
   {
-    name: "mayachain",
+    name: "maya",
     path: "m/44'/931'/0'/0/0",
     derive: (p, pk) => deriveCosmosAddress(pk, "maya"),
   },
@@ -309,7 +310,7 @@ const ECDSA_COINS = [
   { name: "dydx", path: "m/44'/118'/0'/0/0", derive: (p, pk) => deriveCosmosAddress(pk, "dydx") },
   { name: "terra", path: "m/44'/118'/0'/0/0", derive: (p, pk) => deriveCosmosAddress(pk, "terra") },
   {
-    name: "terraClassic",
+    name: "terra classic",
     path: "m/44'/118'/0'/0/0",
     derive: (p, pk) => deriveCosmosAddress(pk, "terra"),
   },
@@ -373,9 +374,26 @@ export function deriveECDSACoins(privKeyHex, chainCodeHex) {
   return results;
 }
 
-export function deriveEdDSACoins(privKeyHex, pubKeyHex) {
-  const privKey = hexToBytes(privKeyHex);
-  const pubKey = hexToBytes(pubKeyHex);
+// Reduce an EdDSA scalar mod L (ed25519 group order) and recompute the public key.
+// DKLS Schnorr key export can return raw scalars > L that need reduction.
+function processEdDSAScalar(rawPrivKey) {
+  const L = ed25519.Point.Fn.ORDER;
+  let scalar = BigInt("0x" + bytesToHex(rawPrivKey));
+  if (scalar >= L) {
+    scalar = scalar % L;
+  }
+  let hexScalar = scalar.toString(16).padStart(64, "0");
+  const privKey = hexToBytes(hexScalar);
+  const pubPoint = ed25519.Point.BASE.multiply(scalar);
+  const pubKey = hexToBytes(pubPoint.toHex());
+  return { privKey, pubKey };
+}
+
+export function deriveEdDSACoins(privKeyHex, _pubKeyHex) {
+  const rawPrivKey = hexToBytes(privKeyHex);
+  const { privKey, pubKey } = processEdDSAScalar(rawPrivKey);
+  const processedPrivHex = bytesToHex(privKey);
+  const processedPubHex = bytesToHex(pubKey);
   const results = [];
 
   for (const coin of EDDSA_COINS) {
@@ -385,8 +403,8 @@ export function deriveEdDSACoins(privKeyHex, pubKeyHex) {
         name: coin.name,
         derivePath: coin.path,
         address: result.address,
-        hexPrivateKey: privKeyHex,
-        hexPublicKey: pubKeyHex,
+        hexPrivateKey: processedPrivHex,
+        hexPublicKey: processedPubHex,
       });
     } catch {
       // skip coins that fail derivation

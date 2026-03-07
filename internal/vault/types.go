@@ -1,7 +1,7 @@
 package vault
 
 import (
-	"github.com/vultisig/vsd/internal/tss"
+	"github.com/SxMShaDoW/Vultisig-Share-Decoder/internal/tss"
 )
 
 type SchemeType int
