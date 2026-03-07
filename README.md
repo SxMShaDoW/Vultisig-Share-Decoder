@@ -1,5 +1,7 @@
 # Vultisig Share Decoder
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/SxMShaDoW/Vultisig-Share-Decoder.svg)](https://pkg.go.dev/github.com/SxMShaDoW/Vultisig-Share-Decoder)
+
 A cryptographic recovery tool that extracts private keys from Vultisig TSS (Threshold Signature Scheme) vault shares. Supports both **GG20** and **DKLS** schemes and derives addresses for 13+ cryptocurrencies.
 
 You can (and should) run this locally.
