@@ -223,7 +223,7 @@ func ParseVault(content []byte) (map[types.TssKeyType]tss.LocalState, error) {
 
 func extractLocalStates(vault *v1.Vault) (map[types.TssKeyType]tss.LocalState, error) {
 	// Check if this is a DKLS vault by looking for DKLS indicators
-	isDKLS := vault.ResharePrefix != "" || len(vault.KeyShares) > 0 && !isJSONString(vault.KeyShares[0].Keyshare)
+	isDKLS := len(vault.KeyShares) > 0 && !isJSONString(vault.KeyShares[0].Keyshare)
 
 	if isDKLS {
 		// For DKLS vaults, we don't parse keyshares as JSON since they're in a different format

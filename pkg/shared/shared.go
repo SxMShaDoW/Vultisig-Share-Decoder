@@ -18,6 +18,13 @@ import (
 	"encoding/json"
 )
 
+type DKLSHandlerFunc func(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error)
+
+var dklsHandler DKLSHandlerFunc
+
+func RegisterDKLSHandler(handler DKLSHandlerFunc) {
+	dklsHandler = handler
+}
 func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
 	var outputBuilder strings.Builder
 
@@ -28,7 +35,7 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 	if len(fileInfos) == 0 {
 		return "", fmt.Errorf("no files provided")
 	}
-	
+
 	allSecret := make([]types.TempLocalState, 0, len(fileInfos))
 
 	// Process each file
@@ -60,8 +67,11 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 			if err != nil {
 				// Check if this error indicates a DKLS vault
 				if strings.Contains(err.Error(), "DKLS vault detected") {
-					log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
-					continue // Skip this file for GG20 processing
+					log.Printf("File %d detected as DKLS format, attempting DKLS key export", i)
+					if dklsHandler != nil {
+						return dklsHandler(fileInfos, passwords, source)
+					}
+					return "", fmt.Errorf("DKLS vault detected but DKLS handler is not available in this build")
 				}
 				return "", fmt.Errorf("error processing file %d: %w", i, err)
 			}
@@ -69,10 +79,12 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 			log.Printf("Successfully unmarshalled as protobuf VaultContainer")
 			localStates, err = fileutils.GetLocalStateFromBakContent([]byte(contentStr), password, source)
 			if err != nil {
-				// Check if this error indicates a DKLS vault
 				if strings.Contains(err.Error(), "DKLS vault detected") {
-					log.Printf("File %d detected as DKLS format, skipping GG20 processing", i)
-					continue // Skip this file for GG20 processing
+					log.Printf("File %d detected as DKLS format, attempting DKLS key export", i)
+					if dklsHandler != nil {
+						return dklsHandler(fileInfos, passwords, source)
+					}
+					return "", fmt.Errorf("DKLS vault detected but DKLS handler is not available in this build")
 				}
 				return "", fmt.Errorf("error processing vault container file %d: %w", i, err)
 			}
@@ -103,8 +115,6 @@ func ProcessFileContent(fileInfos []types.FileInfo, passwords []string, source t
 	}
 	return outputBuilder.String(), nil
 }
-
-
 
 func ParseLocalState(content []byte) (map[types.TssKeyType]tss.LocalState, error) {
 	var vault v1.Vault

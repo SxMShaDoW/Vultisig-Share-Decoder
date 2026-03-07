@@ -1,33 +1,33 @@
 package keyhandlers
 
 import (
+	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"crypto/ed25519"
 
+	"crypto/sha256"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/btcsuite/btcutil/base58"
 	coskey "github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	dogec "github.com/eager7/dogd/btcec"
+	dogechaincfg "github.com/eager7/dogd/chaincfg"
+	"github.com/eager7/dogutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gcash/bchd/bchec"
 	bchChainCfg "github.com/gcash/bchd/chaincfg"
 	"github.com/gcash/bchutil"
-	dogec "github.com/eager7/dogd/btcec"
-	dogechaincfg "github.com/eager7/dogd/chaincfg"
-	"github.com/eager7/dogutil"
-	"github.com/ltcsuite/ltcd/ltcutil"
 	ltcchaincfg "github.com/ltcsuite/ltcd/chaincfg"
-	"main/tss"
-	"github.com/btcsuite/btcutil/base58"
+	"github.com/ltcsuite/ltcd/ltcutil"
+	"github.com/tonkeeper/tongo/wallet"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/sha3"
-	"crypto/sha256"
-	"github.com/tonkeeper/tongo/wallet"
+	"main/tss"
 )
 
 func GetDerivedPrivateKeys(derivePath string, rootPrivateKey *hdkeychain.ExtendedKey) (*hdkeychain.ExtendedKey, error) {
@@ -328,19 +328,18 @@ func ShowSuiKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 	// For Sui, we need to create an address from the public key using Blake2b hashing
 	// Sui address = Blake2b(scheme_flag || public_key)[0:20]
 	// where scheme_flag = 0x00 for Ed25519
-	
+
 	// Create the input for hashing: scheme flag (0x00 for Ed25519) + public key
 	input := make([]byte, 1+len(eddsaPublicKeyBytes))
 	input[0] = 0x00 // Ed25519 scheme flag
 	copy(input[1:], eddsaPublicKeyBytes)
-	
+
 	// Hash using Blake2b
 	hash := blake2b.Sum256(input)
 
-
 	// Use full hash for address
 	addressBytes := hash[:]
-	
+
 	// Convert to hex with 0x prefix for Sui address format
 	suiAddress := "0x" + hex.EncodeToString(addressBytes)
 
@@ -365,33 +364,33 @@ func ShowTronKey(extendedPrivateKey *hdkeychain.ExtendedKey, outputBuilder *stri
 	// Get uncompressed public key (64 bytes + 0x04 prefix)
 	pubKeyECDSA := nonHardenedPubKey.ToECDSA()
 	pubKeyBytes := crypto.FromECDSAPub(pubKeyECDSA)
-	
+
 	// Remove the 0x04 prefix to get the 64-byte uncompressed key
 	pubKeyNoPrefix := pubKeyBytes[1:]
-	
+
 	// Hash with Keccak256
 	hash := sha3.NewLegacyKeccak256()
 	hash.Write(pubKeyNoPrefix)
 	pubKeyHash := hash.Sum(nil)
-	
+
 	// Take the last 20 bytes
 	ethAddr := pubKeyHash[12:]
-	
+
 	// Prefix with Tron version byte (0x41 for mainnet)
 	tronAddr := make([]byte, 21)
 	tronAddr[0] = 0x41
 	copy(tronAddr[1:], ethAddr)
-	
+
 	// Calculate checksum using double SHA256
 	firstSHA := sha256.Sum256(tronAddr)
 	secondSHA := sha256.Sum256(firstSHA[:])
 	checksum := secondSHA[:4]
-	
+
 	// Combine address + checksum and encode with Base58
 	addrWithChecksum := make([]byte, 25)
 	copy(addrWithChecksum[:21], tronAddr)
 	copy(addrWithChecksum[21:], checksum)
-	
+
 	tronAddress := base58.Encode(addrWithChecksum)
 
 	fmt.Fprintf(outputBuilder, "\nhex encoded private key for tron:%s\n", hex.EncodeToString(nonHardenedPrivKey.Serialize()))
@@ -413,9 +412,9 @@ func ShowTonKeyFromEdDSA(eddsaPrivateKeyBytes []byte, eddsaPublicKeyBytes []byte
 
 	// Set wallet parameters for mainnet V3R2 wallet
 	ver := wallet.V4R2
-	workchain := 0                         // Mainnet workchain
-	networkGlobalID := int32(-239)         // Mainnet global ID
-	subWalletId := uint32(698983191)       // Default subWalletId for v3R2
+	workchain := 0                   // Mainnet workchain
+	networkGlobalID := int32(-239)   // Mainnet global ID
+	subWalletId := uint32(698983191) // Default subWalletId for v3R2
 
 	// Generate address using the improved offline method
 	addr, err := wallet.GenerateWalletAddress(

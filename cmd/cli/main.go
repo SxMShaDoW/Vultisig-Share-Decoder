@@ -1,5 +1,6 @@
 //go:build cli
 // +build cli
+
 package main
 
 import (
@@ -28,6 +29,10 @@ func main() {
                         Required:   true,
                         HasBeenSet: false,
                     },
+                    &cli.StringSliceFlag{
+                        Name:  "password",
+                        Usage: "password for encrypted vault files",
+                    },
                     &cli.StringFlag{
                         Name:  "scheme",
                         Usage: "force scheme type (gg20, dkls, auto)",
@@ -55,7 +60,9 @@ func main() {
             },
         },
     }
-    if err := app.Run(os.Args); err != nil {
-        panic(err)
+    err := app.Run(os.Args)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+        os.Exit(1)
     }
 }

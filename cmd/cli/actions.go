@@ -1,5 +1,6 @@
 //go:build cli
 // +build cli
+
 package main
 
 import (
@@ -17,12 +18,17 @@ import (
 	"github.com/urfave/cli/v2"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
 	"main/pkg/types"
+	"main/pkg/dkls"
 	"main/pkg/fileutils"
 	"main/pkg/encryption"
 	"main/pkg/keyhandlers"
 	"main/pkg/keyprocessing"
 	"main/pkg/shared"
 )
+
+func init() {
+	shared.RegisterDKLSHandler(ProcessDKLSFiles)
+}
 
 func ProcessFiles(files []string, passwords []string, source types.InputSource) (string, error) {
 	if len(files) == 0 {
@@ -102,8 +108,11 @@ func ProcessFilesContent(files []string, passwords []string, source types.InputS
 func RecoverAction(cCtx *cli.Context) error {
 	files := cCtx.StringSlice("files")
 	scheme := cCtx.String("scheme")
-	// Create a slice of empty strings for passwords
+	passwordArgs := cCtx.StringSlice("password")
 	passwords := make([]string, len(files))
+	for i := 0; i < len(passwordArgs) && i < len(files); i++ {
+		passwords[i] = passwordArgs[i]
+	}
 	source := types.CommandLine
 
 	fmt.Printf("Processing %d files: %v\n", len(files), files)
@@ -129,7 +138,7 @@ func RecoverAction(cCtx *cli.Context) error {
 	switch scheme {
 	case "dkls":
 		fmt.Println("Using DKLS scheme")
-		return fmt.Errorf("DKLS is unsupported on the CLI for now. Please use the web interface.")
+		output, err = ProcessDKLSFiles(fileInfos, passwords, source)
 	case "gg20":
 		fmt.Println("Using GG20 scheme")
 		output, err = ProcessGG20Files(fileInfos, passwords, source)
@@ -383,4 +392,51 @@ func TestAddressAction(c *cli.Context) error {
 	}
 
 	return nil
+}
+func ProcessDKLSFiles(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (string, error) {
+	var outputBuilder strings.Builder
+
+	vaultKeyshares, err := dkls.ExtractAllKeyshares(fileInfos, passwords, source)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract DKLS keyshares: %w", err)
+	}
+
+	fmt.Fprintf(&outputBuilder, "Extracted %d DKLS keyshares with party IDs: %v\n", len(vaultKeyshares.ECDSAKeyshares), vaultKeyshares.PartyIDs)
+
+	ecdsaResult, err := dkls.ExportPrivateKey(vaultKeyshares.ECDSAKeyshares, vaultKeyshares.PartyIDs)
+	if err != nil {
+		return "", fmt.Errorf("failed to export DKLS private key: %w", err)
+	}
+
+	fmt.Fprintf(&outputBuilder, "\n=== DKLS ECDSA Key Export Successful ===\n")
+	fmt.Fprintf(&outputBuilder, "Private key length: %d bytes\n", len(ecdsaResult.PrivateKey))
+	fmt.Fprintf(&outputBuilder, "Public key length: %d bytes\n", len(ecdsaResult.PublicKey))
+	fmt.Fprintf(&outputBuilder, "Chain code length: %d bytes\n\n", len(ecdsaResult.ChainCode))
+
+	coinConfigs := keyhandlers.GetSupportedCoins()
+	err = keyhandlers.ProcessRootKeyForCoins(ecdsaResult.PrivateKey, ecdsaResult.ChainCode, coinConfigs, &outputBuilder)
+	if err != nil {
+		return "", fmt.Errorf("failed to derive ECDSA coin keys: %w", err)
+	}
+
+	if len(vaultKeyshares.EdDSAKeyshares) >= 2 {
+		eddsaResult, err := dkls.ExportEdDSAPrivateKey(vaultKeyshares.EdDSAKeyshares, vaultKeyshares.PartyIDs)
+		if err != nil {
+			fmt.Fprintf(&outputBuilder, "\nWarning: EdDSA key export failed: %v\n", err)
+		} else {
+			fmt.Fprintf(&outputBuilder, "\n=== DKLS EdDSA Key Export Successful ===\n")
+			fmt.Fprintf(&outputBuilder, "EdDSA Private key length: %d bytes\n", len(eddsaResult.PrivateKey))
+			fmt.Fprintf(&outputBuilder, "EdDSA Public key length: %d bytes\n\n", len(eddsaResult.PublicKey))
+
+			eddsaCoins := keyhandlers.GetEdDSACoins()
+			err = keyhandlers.ProcessEdDSAKeyForCoins(eddsaResult.PrivateKey, eddsaResult.PublicKey, eddsaCoins, &outputBuilder)
+			if err != nil {
+				fmt.Fprintf(&outputBuilder, "\nWarning: EdDSA coin derivation failed: %v\n", err)
+			}
+		}
+	} else {
+		fmt.Fprintf(&outputBuilder, "\nNote: No EdDSA keyshares found in vault files (Solana/Sui/TON addresses unavailable)\n")
+	}
+
+	return outputBuilder.String(), nil
 }

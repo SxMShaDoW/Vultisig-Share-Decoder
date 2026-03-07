@@ -1,8 +1,8 @@
 package keyhandlers
 
 import (
-	"strings"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"strings"
 )
 
 // CoinConfig represents configuration for a supported ECDSA-based cryptocurrency
