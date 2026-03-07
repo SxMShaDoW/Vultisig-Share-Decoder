@@ -23,3 +23,6 @@ go.work
 
 # Uncompressed WASM (only commit the .gz version)
 static/main.wasm
+
+# Obsidian config (local-only)
+vault/.obsidian/
