@@ -4,166 +4,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vultisig Share Decoder</title>
+    <meta name="description" content="Recover private keys from Vultisig TSS vault shares. Supports GG20 and DKLS schemes.">
+    <link rel="icon" href="favicon.ico">
     <link rel="stylesheet" href="style.css">
     <script src="wasm_exec.js"></script>
-    <script type="module" src="main.js"></script>
 </head>
 <body>
-    <div id="loader" class="loader-container">
-        <div class="loader-content">
-            <div class="loader-message">🚀 Firing up the rocket ship 🚀</div>
-            <div class="loader"></div>
-        </div>
+
+<div id="loader" class="loader-container">
+    <div class="loader-content">
+        <div class="loader-spinner"></div>
+        <p class="loader-text">Loading cryptographic modules...</p>
     </div>
+</div>
 
-    <div id="content" class="content-container">
-        <main class="container">
+<div id="app" style="display:none">
+    <header class="header">
+        <div class="container">
             <h1>Vultisig Share Decoder</h1>
+            <p class="subtitle">Recover private keys from Vultisig TSS vault shares</p>
+        </div>
+    </header>
 
-            <section id="fileInputs" class="file-inputs">
-                <h3>Upload your vault shares</h3>
-                <div class="scheme-selection">
-                    <label>Scheme Type:</label>
-                    <div class="scheme-options">
-                        <input type="radio" id="auto" name="scheme" value="auto" checked>
-                        <label for="auto">GG20</label>
-
-                        <!-- <input type="radio" id="gg20" name="scheme" value="gg20">
-                        <label for="gg20">GG20 TSS</label> -->
-
-                        <input type="radio" id="dkls" name="scheme" value="dkls">
-                        <label for="dkls">DKLS</label>
-                    </div>
-                </div>
+    <main class="container">
+        <section class="upload-section">
+            <div id="fileInputs">
                 <div class="file-group" id="fileGroup0">
                     <div class="input-wrapper">
-                        <input type="file" accept=".bak,.vult" class="file-input" />
+                        <label class="file-drop-label">
+                            <input type="file" accept=".bak,.vult" class="file-input" />
+                            <span class="file-drop-text">Choose file or drop here</span>
+                        </label>
                         <input type="password" placeholder="Password (optional)" class="password-input" />
                     </div>
-                    <button class="btn remove-file-btn" onclick="removeFileInput(0)">
-                        <span class="btn-icon">×</span>
-                    </button>
+                    <button class="btn-icon-only remove-btn" onclick="removeFileInput('fileGroup0')">&times;</button>
                 </div>
-            </section>
-
-            <div class="actions">
-                <button class="btn add-file-btn" onclick="addFileInput()">
-                    <span class="btn-icon">+</span> Add Another File
-                </button>
-                <button class="btn primary-btn" id="recoverBtn" onclick="recoverKeys()">
-                    Recover Keys
-                </button>
             </div>
 
-            <section id="results" class="results-section debug-section">
-            </section>
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="addFileInput()">+ Add File</button>
+                <button class="btn btn-primary" id="recoverBtn" onclick="handleRecover()">Recover Keys</button>
+            </div>
+        </section>
 
-            <section class="debug-section">
-                <h3>Debug Output</h3>
-                <pre id="debugOutput" class="debug-output"></pre>
-            </section>
+        <section id="results" class="results-container"></section>
 
-            <section class="results-section debug-section">
-                <h3>Support This Project</h3>
-                <p>If you find this tool helpful, please consider making a donation</p>
-                <div class="donation-addresses">
-                    <div class="address-item">
-                        <span class="currency">BTC:</span>
-                        <span class="address">bc1qed9kurz5045myzsm25gdq52tcntpaj8x8zlat2</span>
-                    </div>
-                    <div class="address-item">
-                        <span class="currency">ETH:</span>
-                        <span class="address">0x5D4892B1b76157ed0b209c065F9753a55795b257</span>
-                    </div>
-                </div>
-            </section>
-
-            <section class="results-section">             
-                <h3 class="toggle-header" onclick="toggleSection('usefulToolContent')">
-                    Why is this tool useful <span class="toggle-arrow">▼</span> </h3>
-                <div class="content" id="usefulToolContent"">
-                <p>It can provide you information about your backup without having to import it into the app. It can extract your private key information in case you need to migrate to a traditional wallet. </p>
-                    </div>
-            </section>
-            <section class="results-section">             
-                <h3 class="toggle-header" onclick="toggleSection('howTo')">
-                    How does the tool work? <span class="toggle-arrow">▼</span> </h3>
-                <div class="content" id="howTo"">
-                <p>You can upload your vault shares + password (optional). It will only extract the correct private key information if you provide more than half of the threshold files (2of2,2of3,4of6, etc).</p>
-                    </div>
-            </section>
-
-            <section class="results-section">
-                <h3 class="toggle-header" onclick="toggleSection('examples')">
-                    Some examples to test with <span class="toggle-arrow">▼</span> </h3>
-                <div class="content" id="examples"">
-                    <p>If you are looking for some examples on how to use it. You can find shares in the Github Repo to download. Just download them and upload it here.</p>
-                    <ul>
-                    <li> <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/Test-part1of2.vult">Test Vault 1/2 Share Android</a> </li>
-                    <li><a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/Test-part2of2.vult">Test Vault 2/2 Share iPhone</a> </li>
-                   <li> <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/blob/main/honeypot.bak">JP's Honeypot</a>
-                    </li>
-                    </ul>
-                    <p> You can check the code (and run it locally) from <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/tree/main">Github</a> and see the code deployed from <a href="http://replit.com/@kersch/VultisigShareDecoder">Replit</a> </p>
-                    </div>
-            </section>
-
-            <section class="results-section" >
-                <h3 class="toggle-header" onclick="toggleSection('readResults')">
-                    How to read the results <span class="toggle-arrow">▼</span> </h3>
-                <div class="content" id="readResults"">
+        <section class="info-section">
+            <details>
+                <summary>How does this work?</summary>
+                <p>Upload your vault shares (.vult or .bak files) with optional passwords. The tool automatically detects the scheme (GG20 or DKLS) and reconstructs your private keys. You need more than half of the threshold files (2 of 2, 2 of 3, 3 of 5, etc).</p>
+                <p>Everything runs locally in your browser. No data is sent to any server.</p>
+            </details>
+            <details>
+                <summary>How to use the recovered keys</summary>
                 <ul>
-                    <li>The WIF private keys for Bitcoin-like networks can be imported into  tools such as Electrum.</li>
-                    <li>The private keys for Ethereum networks can be imported into tools such as Metamask.</li>
-                    <li>The private keys for Cosmos networks can be imported into tools such as Keplr.</li>
-                    <li>The private keys will only have your balance if you uploaded more than a 50% threshold (2of2,2of3,3of5,4of7,etc) of the shares.</li>
-                    <li>Remember: This should be a 1 time recovery situation as Vultisig features cannot protect you after you have imported your private key into another wallet.</li>
+                    <li>Bitcoin WIF keys can be imported into Electrum</li>
+                    <li>Ethereum private keys can be imported into MetaMask</li>
+                    <li>Cosmos private keys can be imported into Keplr</li>
+                    <li>This should be a one-time recovery. Vultisig's threshold security no longer protects you after importing into a single-key wallet.</li>
                 </ul>
-                </div>
-            </section>
-        </main>
+            </details>
+            <details>
+                <summary>Test files</summary>
+                <p>Download test shares from the <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder">GitHub repo</a>:</p>
+                <ul>
+                    <li>GG20: Test-part1of2.vult + Test-part2of2.vult</li>
+                    <li>GG20: honeypot.bak (single file)</li>
+                    <li>DKLS: TestDKLS1of2.vult + TestDKLS2of2.vult</li>
+                </ul>
+            </details>
+        </section>
+    </main>
 
+    <footer class="footer">
+        <div class="container">
+            <p>All processing happens locally in your browser. No data leaves your device.</p>
+            <p class="footer-links">
+                <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder">GitHub</a>
+                <span class="sep">&middot;</span>
+                <a href="https://vultisig.com">Vultisig</a>
+            </p>
+        </div>
+    </footer>
+</div>
 
-
-        <footer class="footer">
-            <section class="footer-section">
-                <h2 class="toggle-header" onclick="toggleSection('disclaimerContent')">
-                    Disclaimer <span class="toggle-arrow">▼</span>
-                </h2>
-                <div class="content" id="disclaimerContent">
-                    <p>Use this tool and its data at your own risk. While we strive for accuracy, it is essential that you independently verify all transaction information.</p>
-                    <p>All information provided is on an "as is" basis, without any guarantees of completeness, accuracy, timeliness or results.</p>
-                    <p>This website is for informational purposes only and does not constitute financial, tax, or legal advice.</p>
-                </div>
-            </section>
-
-            <section class="footer-section">
-                <h2 class="toggle-header" onclick="toggleSection('legalContent')">
-                    Terms of Service and Privacy Policy <span class="toggle-arrow">▼</span>
-                </h2>
-                <div class="content" id="legalContent">
-                    <div class="legal-grid">
-                        <div class="legal-item">
-                            <h3>Terms of Service</h3>
-                            <ul>
-                                <li>Use this service responsibly</li>
-                                <li>For informational purposes only</li>
-                                <li>No illegal activities permitted</li>
-                            </ul>
-                        </div>
-                        <div class="legal-item">
-                            <h3>Privacy Policy</h3>
-                            <ul>
-                                <li>No data storage</li>
-                                <li>Can be downloaded for offline use</li>
-                                <li>No third-party data sharing</li>
-                                <li>Hosted on Replit infrastructure, so their privacy policy applies</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        </footer>
-    </div>
+<script type="module" src="app.js"></script>
 </body>
 </html>

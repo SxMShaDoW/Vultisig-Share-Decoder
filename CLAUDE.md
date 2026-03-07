@@ -6,10 +6,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Vultisig Share Decoder (VSD) is a cryptographic recovery tool that extracts private keys from Vultisig TSS (Threshold Signature Scheme) vault shares. It supports two schemes: **GG20** (via `bnb-chain/tss-lib`) and **DKLS** (via `vultisig/go-wrappers` CGo bindings). Recovered keys are derived into addresses for 13 cryptocurrencies (BTC, ETH, DOGE, LTC, THORChain, Cosmos chains, Solana, Sui, TON, etc.).
 
+Deployment targets: **CLI** (Go, both schemes via CGo), **Website** (static site on Cloudflare Pages with Go WASM for GG20 + Rust WASM for DKLS/Schnorr).
+
 ## Build & Development Commands
 
 ```bash
-make cli         # Build CLI binary -> dist/cli
+make cli         # Build CLI binary -> dist/cli (13MB stripped)
+make wasm        # Build Go WASM -> static/main.wasm (GG20 + address derivation)
+make pages       # Build WASM + gzip for Cloudflare Pages deployment
 make test        # go test ./...
 make check       # go fmt && go vet
 make clean       # Remove build artifacts
@@ -34,6 +38,12 @@ make clean       # Remove build artifacts
 
 `github.com/vultisig/vsd` — all internal packages under `internal/`.
 
+### Build Tags
+
+- `cli`: CLI binary (CGo for DKLS via go-wrappers)
+- `wasm`: Go WASM for browser (GG20 recovery + address derivation, no CGo)
+- `!wasm` on `dkls.go`: DKLS CGo code excluded from WASM builds; `dkls_stub.go` provides a stub
+
 ### Core Data Flow
 
 1. **Input**: `.vult`/`.bak` files -> base64-encoded protobuf `VaultContainer`
@@ -53,9 +63,20 @@ make clean       # Remove build artifacts
 - **`internal/format`**: Text and JSON formatters for `RecoveryResult`
 - **`internal/tss`**: Minimal — just the `LocalState` struct for GG20 keyshare deserialization
 
-### Unified Pipeline
+### Website Architecture (static/)
 
-One code path: `recovery.Recover()` returns `*RecoveryResult`, then the CLI formats via `format.Text()` or `format.JSON()`. No duplicate text/JSON processing.
+- **Go WASM** (`main.wasm.gz`, ~5.5MB): Exposes `RecoverGG20()`, `DeriveAddresses()`, `DeriveEdDSAAddresses()` to JS
+- **Rust DKLS WASM** (`vs_wasm_bg.wasm`, 783KB): ECDSA key export via `Keyshare` + `KeyExportSession`
+- **Rust Schnorr WASM** (`vs_schnorr_wasm_bg.wasm`, 700KB): EdDSA key export (same API pattern)
+- **JS** (`app.js`): Vault parsing via `vault_pb.js`, AES-GCM decryption via `aes_gcm.js`, scheme detection, WASM orchestration, structured JSON result rendering
+
+Flow: Parse vault in JS -> detect scheme -> DKLS: Rust WASM key export + Go WASM address derivation; GG20: Go WASM full recovery -> render structured card results.
+
+### WASM JS Exports
+
+- `RecoverGG20(fileContents: Uint8Array[], passwords: string[]) -> JSON string`
+- `DeriveAddresses(privKeyHex: string, chainCodeHex: string) -> JSON string`
+- `DeriveEdDSAAddresses(privKeyHex: string, pubKeyHex: string) -> JSON string`
 
 ## Test Files
 
