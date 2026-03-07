@@ -1,142 +1,152 @@
 # Vultisig Share Decoder
 
-This is a simple "recovery" tool to see the public information on your vault share and recover private keys from vault shares. This tool supports both **GG20** and **DKLS** cryptographic schemes.
+A cryptographic recovery tool that extracts private keys from Vultisig TSS (Threshold Signature Scheme) vault shares. Supports both **GG20** and **DKLS** schemes and derives addresses for 13+ cryptocurrencies.
 
-This is useful when you want to remember what share it is (if you changed the name) or recover your private keys for importing into other wallets.
 You can (and should) run this locally.
 
-## Supported Schemes
-- **GG20**: Full support via CLI and web interface
-- **DKLS**: Only supported via the web interface (CLI support not available)
-
 ## Demo
-[Demo](https://vultisig-share-decoder.replit.app/?)
 
-### Dependencies
-[Go](https://go.dev/doc/install)
+[https://vultisig-share-decoder.pages.dev/](https://vultisig-share-decoder.pages.dev/)
 
-### Running the GO Binary
-1. `git clone` or just download `dist/cli` binary
-2. Once downloaded, make sure it is executable such as `chmod +x dist/cli`
-3. Once its executable you can do the same CLI commands below. 
-`./dist/cli recover --files .... --files ...`
+## Supported Recovery Networks
 
-Note: You should not trust this binary and create your own with `make all` or `make cli`
+**UTXO Chains:** Bitcoin, Bitcoin Cash, Dogecoin, Litecoin
 
-## CLI Commands
+**Cosmos/BFT Chains:** THORChain, MayaChain, Cosmos Hub, Kujira, dYdX, Terra Classic, Terra
 
-### Recover Keys from Vault Shares
-**Note: DKLS recovery is only supported via the web interface, not the CLI**
+**EVM Chains:** Ethereum, Tron
 
-Recover private keys from GG20 vault shares:
-```bash
-make cli && ./dist/cli recover --files "<vault_share1.dat|.bak|.vult>" --files "<vault_share2.dat|.bak|.vult>"
-```
+**EdDSA Chains:** Solana, Sui, TON
 
-Example with included test files:
-```bash
-make cli && ./dist/cli recover --files "honeypot.bak"
-make cli && ./dist/cli recover --files "Test-part1of2.vult" --files "Test-part2of2.vult"
-```
+## Supported Schemes
 
-For GG20 schemes, you can force the scheme (defaults to auto-detection):
-```bash
-make cli && ./dist/cli recover --files "vault1.vult" --files "vault2.vult" --scheme gg20
-```
+| Scheme | CLI | Web |
+|--------|-----|-----|
+| GG20   | Yes | Yes |
+| DKLS   | Yes (requires CGo) | Yes |
 
-### Test Address Generation
-Test HD derivation and address generation from a known private key with custom chaincode:
+## Quick Start
+
+### Prerequisites
+
+- [Go 1.25+](https://go.dev/doc/install)
+- [Bun](https://bun.sh/) (for JS derivation bundling)
+
+### CLI
 
 ```bash
-make cli && ./dist/cli test-address --private-key <hex_private_key> --chaincode <hex_chaincode>
+# Build
+make cli
+
+# Recover from vault shares (auto-detects scheme)
+./dist/cli recover --files "share1.vult" --files "share2.vult"
+
+# Force a specific scheme
+./dist/cli recover --files "vault.bak" --scheme gg20
+
+# JSON output
+./dist/cli recover --files "share1.vult" --files "share2.vult" --format json
 ```
 
-Example:
-```bash
-make cli && ./dist/cli test-address --private-key 2abbfad6ea48607d9665e123456789bed21204cfe479fdec40d33058c0a4e3fe --chaincode e2f8c4826d6d23407cff45498b940f52756c3056fa1bcba0cb7f6bafc2478eac
-```
-
-## Test Files Included
-
-I included [JPThor's unencrypted honeypot](https://github.com/jpthor/blockchain/blob/master/vultisig-JP%20Honeypot%20Vault-2024-09-2of3-e8e5-iPad-D3842FFB838E.bak) to test against.
-
-I also included:
-- `Test-part1of2.vult` and `Test-part2of2.vult` (GG20 shares)
-- `TestDKLS1of2.vult` and `TestDKLS2of2.vult` (DKLS shares - use web interface)
-
-For `ETH` it will return something like this:
-```
-WIF Private Keys:
-ethereum:2abbfad6ea48607d9665eXXXXXbed21204cfe479fdec40d33058c0a4e3feb
-```
-
-`2abbfad6ea48607d9665eXXXXXbed21204cfe479fdec40d33058c0a4e3feb` can be imported into [MetaMask](https://metamask.io/)
-
-For `BTC` it will return something like this:
-```
-WIF Private Keys:
-bitcoin: p2wpkh:L5P6V9eVkvy5H8stBGj7MhJxh8cCSLicYvGBcxfLxdFUzuktbEir
-```
-
-`p2wpkh:L5P6V9eVkvy5H8stBGj7MhJxh8cCSLicYvGBcxfLxdFUzuktbEir` can be imported into [Electrum](https://electrum.org/#download)
-
-You can also validate that the private key is correct if it generates the Address that matches what you had in Vultisig.
-
-
-## Running the server locally (which calls the CLI)
-`make all && ./dist/webserver`
-
-## Project Structure
-```
-├── cmd
-│   ├── cli
-│   │   ├── actions.go        # CLI-specific actions (decrypt, recover)
-│   │   └── main.go          # CLI entry point and app configuration
-│   ├── server
-│   │   └── main.go          # Web server entry point
-│   └── wasm
-│       └── main.go          # WebAssembly entry point
-├── pkg
-│   ├── keyhandlers
-│   │   └── key_handlers.go  # Cryptocurrency specific key handlers (BTC, ETH, etc.)
-│   ├── keyprocessing
-│   │   └── key_processing.go # Key processing and reconstruction logic
-│   ├── shared
-│   │   └── shared.go        # Core shared functionality
-│   ├── types
-│   │   └── types.go         # Shared type definitions
-│   └── fileutils
-│       └── fileutils.go     # File handling utilities
-├── static                   # Web assets
-│   ├── index.html          # Main web interface
-│   ├── main.js             # Frontend JavaScript
-│   ├── main.wasm           # Compiled WebAssembly binary
-│   ├── style.css           # Styling
-│   └── wasm_exec.js        # WebAssembly execution environment
-├── go.mod                  # Go module definition
-├── go.sum                  # Go module checksums
-├── Makefile               # Build automation
-└── README.md              # Project documentation
-```
-
-## Build Tags
-
-The project uses Go build tags to manage different builds:
-- `cli`: Command-line interface build
-- `wasm`: WebAssembly build for browser
-- `server`: Web server build
-
-
-## Build Commands (in Makefile)
+### Web (Cloudflare Pages)
 
 ```bash
-# Build CLI
-go build -tags cli -o dist/cli ./cmd/cli
+make pages    # Build Go WASM + bundle JS derivation + gzip
+```
 
-# Build WebAssembly
-GOOS=js GOARCH=wasm go build -tags wasm -o static/main.wasm
+## Build Commands
 
-# Build Web Server
-go build -tags server -o dist/webserver ./cmd/server
+```bash
+make cli      # Build CLI binary -> dist/cli
+make wasm     # Build Go WASM -> static/main.wasm (GG20 recovery)
+make derive   # Bundle JS address derivation -> static/derive.js
+make pages    # Build WASM + derive + gzip for Cloudflare Pages
+make test     # Run Go tests + JS derive tests
+make check    # go fmt + go vet
+make clean    # Remove build artifacts
+```
 
+## Test Files
 
+Located in `testdata/`:
+
+| File | Scheme | Notes |
+|------|--------|-------|
+| `honeypot.bak` | GG20 | [JPThor's unencrypted honeypot](https://github.com/jpthor/blockchain/blob/master/vultisig-JP%20Honeypot%20Vault-2024-09-2of3-e8e5-iPad-D3842FFB838E.bak) (single file) |
+| `Test-part1of2.vult` / `Test-part2of2.vult` | GG20 | Two-share test vault |
+| `TestDKLS1of2.vult` / `TestDKLS2of2.vult` | DKLS | Two-share test vault |
+
+```bash
+# GG20 single share
+./dist/cli recover --files testdata/honeypot.bak
+
+# GG20 two shares
+./dist/cli recover --files testdata/Test-part1of2.vult --files testdata/Test-part2of2.vult
+
+# DKLS two shares
+./dist/cli recover --files testdata/TestDKLS1of2.vult --files testdata/TestDKLS2of2.vult
+```
+
+## Importing Results
+
+**Ethereum** — Import the hex private key into [MetaMask](https://metamask.io/)
+
+**Bitcoin** — Import the WIF key (e.g. `p2wpkh:L5P6V9e...`) into [Electrum](https://electrum.org/#download)
+
+Verify correctness by checking that the derived address matches what you had in Vultisig.
+
+## Architecture
+
+### Data Flow
+
+1. **Input**: `.vult`/`.bak` files (base64-encoded protobuf `VaultContainer`)
+2. **Decryption**: AES-GCM with SHA-256-hashed password (if encrypted)
+3. **Scheme detection**: `vault.DetectScheme()` — binary keyshare = DKLS, JSON = GG20
+4. **Key reconstruction**:
+   - GG20: VSS Shamir reconstruction via `bnb-chain/tss-lib`
+   - DKLS: Algebraic key export via `vultisig/go-wrappers` CGo (ECDSA + EdDSA/Schnorr)
+5. **Derivation**: BIP44/BIP84 HD key derivation into coin-specific addresses
+6. **Output**: Structured `RecoveryResult` as text or JSON
+
+### Project Structure
+
+```
+cmd/
+  cli/          CLI entry point
+  wasm/         Go WASM entry point (GG20 recovery)
+internal/
+  vault/        File parsing, protobuf, AES-GCM decryption, scheme detection
+  recovery/     Unified Recover() entry point, GG20 + DKLS reconstruction
+  derive/       Coin address derivation (BIP32/BIP44)
+  format/       Text and JSON formatters
+  tss/          LocalState struct for GG20 keyshare deserialization
+src/
+  derive.js     JS address derivation source (bundled for web)
+static/         Web assets (HTML, CSS, JS, WASM binaries)
+testdata/       Test vault files
+```
+
+### Build Tags
+
+- **`cli`**: Native CLI binary (CGo enabled for DKLS)
+- **`wasm`**: Go WASM for browser (GG20 only, no CGo)
+- **`!wasm`**: DKLS CGo code excluded from WASM; stub provided
+
+### Website
+
+- **Go WASM** (~5.5MB gzipped): GG20 recovery, lazy-loaded only when needed
+- **Rust DKLS WASM** (783KB): ECDSA key export
+- **Rust Schnorr WASM** (700KB): EdDSA key export
+- **JS derivation** (~27KB gzipped): Pure JS address derivation using `@noble/curves`, `@scure/bip32`
+
+## Adding a New Cryptocurrency
+
+**ECDSA coin**: Add a derive function in `internal/derive/ecdsa.go`, then add an entry to `getECDSACoinDefs()` in `internal/derive/coins.go`.
+
+**EdDSA coin**: Add a derive function in `internal/derive/eddsa.go`, then add an entry to `getEdDSACoinDefs()` in `internal/derive/coins.go`.
+
+The coin is automatically included in all recovery outputs.
+
+## License
+
+See [LICENSE](LICENSE).
