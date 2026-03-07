@@ -1,0 +1,44 @@
+version: 2
+
+builds:
+  - id: vsd
+    main: ./cmd/cli
+    binary: vsd
+    env:
+      - CGO_ENABLED=1
+    ldflags:
+      - -s -w
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: amd64
+
+archives:
+  - id: vsd
+    builds: [vsd]
+    format: tar.gz
+    name_template: "vsd_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: SxMShaDoW
+    name: Vultisig-Share-Decoder
