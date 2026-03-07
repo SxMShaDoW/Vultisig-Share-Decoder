@@ -5,7 +5,6 @@ import (
 	eddsaKeygen "github.com/bnb-chain/tss-lib/v2/eddsa/keygen"
 )
 
-// LocalState represent the information that will be saved locally
 type LocalState struct {
 	PubKey              string                         `json:"pub_key"`
 	ECDSALocalData      keygen.LocalPartySaveData      `json:"ecdsa_local_data"`

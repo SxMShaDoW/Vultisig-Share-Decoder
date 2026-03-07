@@ -1,26 +1,9 @@
-all: cli webserver wasm
+all: cli
 
 cli:
 	@echo "Building CLI..."
 	@mkdir -p dist
-	go build -tags cli -o dist/cli ./cmd/cli 
-
-webserver:
-	@echo "Building web server..."
-	@mkdir -p dist
-	go build -tags server -o dist/webserver ./cmd/server
-
-wasm:
-	@echo "Building WASM..."
-	@mkdir -p static
-	GOOS=js GOARCH=wasm go build -tags wasm -o static/main.wasm ./cmd/wasm
-
-pages: wasm
-	@echo "Compressing WASM for Pages deployment..."
-	gzip -f static/main.wasm
-	@echo "Compressed: $$(ls -lh static/main.wasm.gz | awk '{print $$5}')"
-
-build: all
+	go build -tags cli -o dist/cli ./cmd/cli
 
 test:
 	@echo "Running tests..."
@@ -35,6 +18,5 @@ check:
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf dist/
-	rm -f static/main.wasm static/main.wasm.gz
 
-.PHONY: all cli webserver wasm pages build test check clean
+.PHONY: all cli test check clean

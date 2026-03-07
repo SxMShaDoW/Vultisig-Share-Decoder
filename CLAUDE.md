@@ -4,15 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Vultisig Share Decoder is a multi-platform cryptographic recovery tool that extracts private keys from Vultisig TSS (Threshold Signature Scheme) vault shares. It supports two schemes: **GG20** (via `bnb-chain/tss-lib`) and **DKLS** (native Go + Rust WASM fallback). Recovered keys are derived into addresses for 12+ cryptocurrencies (BTC, ETH, DOGE, LTC, THORChain, Cosmos chains, etc.).
+Vultisig Share Decoder (VSD) is a cryptographic recovery tool that extracts private keys from Vultisig TSS (Threshold Signature Scheme) vault shares. It supports two schemes: **GG20** (via `bnb-chain/tss-lib`) and **DKLS** (via `vultisig/go-wrappers` CGo bindings). Recovered keys are derived into addresses for 13 cryptocurrencies (BTC, ETH, DOGE, LTC, THORChain, Cosmos chains, Solana, Sui, TON, etc.).
 
 ## Build & Development Commands
 
 ```bash
-make cli         # Build CLI binary → dist/cli
-make webserver   # Build web server → dist/webserver
-make wasm        # Build Go WASM → static/main.wasm
-make all         # Build all three targets
+make cli         # Build CLI binary -> dist/cli
 make test        # go test ./...
 make check       # go fmt && go vet
 make clean       # Remove build artifacts
@@ -21,64 +18,68 @@ make clean       # Remove build artifacts
 ### Running
 
 ```bash
-# CLI recovery
-./dist/cli recover --files "Test-part1of2.vult" --files "Test-part2of2.vult"
-./dist/cli recover --files "honeypot.bak"
-./dist/cli recover --files "v1.vult" --files "v2.vult" --scheme dkls
+# Auto-detect scheme
+./dist/cli recover --files testdata/TestDKLS1of2.vult --files testdata/TestDKLS2of2.vult
 
-# Test address derivation from known key
-./dist/cli test-address --private-key <hex> --chaincode <hex>
+# Force scheme
+./dist/cli recover --files testdata/honeypot.bak --scheme gg20
 
-# Web server (serves static/ on :8080)
-./dist/webserver
+# JSON output
+./dist/cli recover --files testdata/TestDKLS1of2.vult --files testdata/TestDKLS2of2.vult --format json
 ```
 
 ## Architecture
 
-### Build Tags
+### Module
 
-Three deployment targets from one codebase via Go build tags: `cli`, `server`, `wasm`.
-
-### Module Name
-
-The Go module is named `main` (non-standard). Internal imports use `main/pkg/...` and `main/tss`.
+`github.com/vultisig/vsd` — all internal packages under `internal/`.
 
 ### Core Data Flow
 
-1. **Input**: `.vult`/`.bak` files → base64-encoded protobuf `VaultContainer` (from `vultisig/commondata`)
+1. **Input**: `.vult`/`.bak` files -> base64-encoded protobuf `VaultContainer`
 2. **Decryption**: AES-GCM with SHA-256-hashed password (if encrypted)
-3. **Scheme detection** (`pkg/shared`): checks for `ResharePrefix` or non-JSON keyshare → DKLS; otherwise GG20
+3. **Scheme detection**: `vault.DetectScheme()` checks `!isJSONString(keyshare)` -> DKLS; otherwise GG20
 4. **Key reconstruction**:
    - GG20: VSS Shamir reconstruction via `bnb-chain/tss-lib/v2/crypto/vss`
-   - DKLS: Heuristic native Go engine (`pkg/dkls/dkls_native.go`); true algebraic reconstruction only in browser via Rust `vs_wasm`
-5. **Derivation**: HD key derivation (BIP44/BIP84) → coin-specific addresses/WIF keys (`pkg/keyhandlers`)
+   - DKLS: True algebraic key export via `vultisig/go-wrappers` CGo (DKLS for ECDSA, Schnorr for EdDSA)
+5. **Derivation**: HD key derivation (BIP44/BIP84) -> coin-specific addresses/WIF keys
+6. **Formatting**: Structured `RecoveryResult` -> text or JSON output
 
 ### Key Packages
 
-- **`pkg/shared`**: Orchestration entry point (`ProcessFileContent()`) — called from all three deployment modes
-- **`pkg/encryption`**: AES-GCM vault decryption
-- **`pkg/fileutils`**: Vault file parsing, protobuf deserialization
-- **`pkg/keyprocessing`**: GG20 (`key_processing.go`) and DKLS (`dkls_processing.go`) reconstruction
-- **`pkg/dkls`**: Native DKLS processor — entropy-based heuristic key extraction (not true algebraic reconstruction)
-- **`pkg/keyhandlers`**: Coin-specific handlers and `GetSupportedCoins()` config
-- **`tss/`**: Local port of `vultisig/mobile-tss-lib` (ported to prevent upstream drift)
+- **`internal/vault`**: File parsing, protobuf deserialization, AES-GCM decryption, scheme detection
+- **`internal/recovery`**: Unified `Recover()` entry point, GG20 + DKLS reconstruction
+- **`internal/derive`**: Coin address derivation with structured returns (no strings.Builder)
+- **`internal/format`**: Text and JSON formatters for `RecoveryResult`
+- **`internal/tss`**: Minimal — just the `LocalState` struct for GG20 keyshare deserialization
 
-### WASM Entry Points (`cmd/wasm/main.go`)
+### Unified Pipeline
 
-Exposes JS globals: `ProcessFiles()`, `DeriveAndShowKeys()`, `DeriveSpecificKey()`, `GetSupportedCoins()`
-
-### Frontend (`static/`)
-
-Static HTML/JS/CSS with two WASM binaries: `main.wasm` (Go) and `vs_wasm_bg.wasm` (Rust DKLS). The Rust WASM handles true DKLS algebraic reconstruction in-browser.
+One code path: `recovery.Recover()` returns `*RecoveryResult`, then the CLI formats via `format.Text()` or `format.JSON()`. No duplicate text/JSON processing.
 
 ## Test Files
 
+Located in `testdata/`:
 - `honeypot.bak` — JPThor's unencrypted honeypot vault (GG20, single file)
 - `Test-part1of2.vult` / `Test-part2of2.vult` — GG20 test shares
 - `TestDKLS1of2.vult` / `TestDKLS2of2.vult` — DKLS test shares
 
 ## Adding a New Cryptocurrency
 
-1. Add a `CoinConfig` entry in `pkg/keyhandlers/coin_config.go`
-2. Implement the handler function in `pkg/keyhandlers/key_handlers.go`
-3. The coin will automatically be included via `GetSupportedCoins()` → `ProcessRootKeyForCoins()`
+### ECDSA coin:
+1. Add a derive function in `internal/derive/ecdsa.go`: `func deriveNewCoin(privKey, pubKey []byte) (CoinKey, error)`
+2. Add entry to `getECDSACoinDefs()` in `internal/derive/coins.go`
+
+### EdDSA coin:
+1. Add a derive function in `internal/derive/eddsa.go`
+2. Add entry to `getEdDSACoinDefs()` in `internal/derive/coins.go`
+
+The coin is automatically included in all recovery outputs.
+
+## Golden Test Values (DKLS test vault)
+
+- ECDSA pubkey: `0333e3d4df9cc071be24fd6c995421036074a1a88e5d3e0bc211b7ef4330078d9b`
+- EdDSA pubkey: `20e368bf985efdc270500c6e9dc1159102323ff6eabab56f8fa9798e4ac0e2a9`
+- BTC: `bc1q0pap5flkh45w8zz2ew9xpf884me55g65l7vqcu`
+- ETH: `0x60790246e37D154e02beaF2b9Fb27F93a26A6B3f`
+- SOL: `3DPAkfuk5bkh1c1Pg5GN57Gr6cSJsZHVBcJLTFMapmA8`
