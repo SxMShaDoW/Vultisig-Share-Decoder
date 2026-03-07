@@ -1,23 +1,39 @@
 import { parseVaultContainer, parseVault } from "./vault_pb.js";
 import { decryptWithAesGcm, fromBase64 } from "./aes_gcm.js";
+import { deriveECDSACoins, deriveEdDSACoins } from "./derive.js";
 
 let goWasmReady = false;
+let goWasmLoading = null;
 let dklsWasmModule = null;
 let schnorrWasmModule = null;
 
-const go = new Go();
-
-const initGoWasm = (async () => {
-  const response = await fetch("main.wasm.gz");
-  if (!response.ok) throw new Error(`Failed to fetch main.wasm.gz: ${response.status}`);
-  const ds = new DecompressionStream("gzip");
-  const decompressed = response.body.pipeThrough(ds);
-  const wasmBytes = await new Response(decompressed).arrayBuffer();
-  const result = await WebAssembly.instantiate(wasmBytes, go.importObject);
-  go.run(result.instance);
-  goWasmReady = true;
-  return result;
-})();
+// Go WASM is lazy-loaded — only fetched when GG20 recovery is needed
+function loadGoWasm() {
+  if (goWasmLoading) return goWasmLoading;
+  goWasmLoading = (async () => {
+    // Load wasm_exec.js (defines Go constructor) if not already loaded
+    if (typeof Go === "undefined") {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement("script");
+        s.src = "wasm_exec.js";
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    const go = new Go();
+    const response = await fetch("main.wasm.gz");
+    if (!response.ok) throw new Error(`Failed to fetch main.wasm.gz: ${response.status}`);
+    const ds = new DecompressionStream("gzip");
+    const decompressed = response.body.pipeThrough(ds);
+    const wasmBytes = await new Response(decompressed).arrayBuffer();
+    const result = await WebAssembly.instantiate(wasmBytes, go.importObject);
+    go.run(result.instance);
+    goWasmReady = true;
+    return result;
+  })();
+  return goWasmLoading;
+}
 
 const initDklsWasm = (async () => {
   try {
@@ -46,21 +62,15 @@ const initSchnorrWasm = (async () => {
   }
 })();
 
-Promise.all([initGoWasm, initDklsWasm, initSchnorrWasm])
+// Only wait for DKLS/Schnorr WASMs (small, fast). Go WASM loads on demand.
+Promise.all([initDklsWasm, initSchnorrWasm])
   .then(() => {
     document.getElementById("loader").style.display = "none";
     document.getElementById("app").style.display = "block";
   })
   .catch(() => {
-    initGoWasm
-      .then(() => {
-        document.getElementById("loader").style.display = "none";
-        document.getElementById("app").style.display = "block";
-      })
-      .catch((e) => {
-        document.getElementById("loader").innerHTML =
-          `<div class="loader-error">Failed to load: ${e.message}</div>`;
-      });
+    document.getElementById("loader").style.display = "none";
+    document.getElementById("app").style.display = "block";
   });
 
 async function parseVaultFile(fileData, password) {
@@ -173,18 +183,9 @@ async function recoverDKLS(files, passwords, fileNames) {
       thisShare: id,
       allShares: partyIds,
     })),
-    ecdsaKeys: [],
+    ecdsaKeys: deriveECDSACoins(privKeyHex, chainCodeHex),
     eddsaKeys: [],
   };
-
-  if (goWasmReady && window.DeriveAddresses) {
-    try {
-      const derived = JSON.parse(window.DeriveAddresses(privKeyHex, chainCodeHex));
-      if (derived.success && derived.ecdsaKeys) {
-        result.ecdsaKeys = derived.ecdsaKeys;
-      }
-    } catch {}
-  }
 
   if (schnorrWasmModule && eddsaKeyshareData.length >= 2) {
     try {
@@ -192,15 +193,7 @@ async function recoverDKLS(files, passwords, fileNames) {
       const eddsaPubHex = bytesToHex(eddsa.publicKeyBytes);
       const eddsaPrivHex = bytesToHex(eddsa.privateKeyBytes);
       result.publicKeys.eddsa = eddsaPubHex;
-
-      if (goWasmReady && window.DeriveEdDSAAddresses) {
-        try {
-          const derived = JSON.parse(window.DeriveEdDSAAddresses(eddsaPrivHex, eddsaPubHex));
-          if (derived.success && derived.eddsaKeys) {
-            result.eddsaKeys = derived.eddsaKeys;
-          }
-        } catch {}
-      }
+      result.eddsaKeys = deriveEdDSACoins(eddsaPrivHex, eddsaPubHex);
     } catch {}
   }
 
@@ -208,11 +201,11 @@ async function recoverDKLS(files, passwords, fileNames) {
 }
 
 async function recoverGG20(files, passwords) {
-  if (!goWasmReady) throw new Error("Go WASM not ready");
+  // Lazy-load Go WASM only when GG20 recovery is needed
+  await loadGoWasm();
+  if (!goWasmReady) throw new Error("Go WASM failed to load");
 
-  const jsFiles = files;
-  const jsPw = passwords;
-  const jsonStr = window.RecoverGG20(jsFiles, jsPw);
+  const jsonStr = window.RecoverGG20(files, passwords);
   return JSON.parse(jsonStr);
 }
 
@@ -517,9 +510,68 @@ window.toggleCollapsible = function (header) {
   }
 };
 
+const DEMO_FILES = {
+  dkls: {
+    files: ["testdata/TestDKLS1of2.vult", "testdata/TestDKLS2of2.vult"],
+    names: ["TestDKLS1of2.vult", "TestDKLS2of2.vult"],
+  },
+  gg20: {
+    files: ["testdata/Test-part1of2.vult", "testdata/Test-part2of2.vult"],
+    names: ["Test-part1of2.vult", "Test-part2of2.vult"],
+  },
+};
+
+async function runDemo(demoId) {
+  const demo = DEMO_FILES[demoId];
+  if (!demo) return;
+
+  const btn = document.getElementById("recoverBtn");
+  btn.disabled = true;
+  btn.textContent = "Recovering...";
+  clearResults();
+
+  // Disable all demo buttons
+  document.querySelectorAll(".btn-demo").forEach((b) => (b.disabled = true));
+
+  try {
+    const fileData = await Promise.all(
+      demo.files.map(async (url) => {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Failed to fetch ${url}`);
+        return new Uint8Array(await resp.arrayBuffer());
+      }),
+    );
+
+    const passwords = demo.files.map(() => "");
+    const firstVault = await parseVaultFile(fileData[0], "");
+    const scheme = detectScheme(firstVault);
+    let result;
+
+    if (scheme === "dkls") {
+      result = await recoverDKLS(fileData, passwords, demo.names);
+    } else {
+      result = await recoverGG20(fileData, passwords);
+    }
+
+    if (!result.success) {
+      showError(result.error || "Recovery failed");
+      return;
+    }
+
+    displayResults(result);
+  } catch (err) {
+    showError(err.message || "Demo failed");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Recover Keys";
+    document.querySelectorAll(".btn-demo").forEach((b) => (b.disabled = false));
+  }
+}
+
 window.addFileInput = addFileInput;
 window.removeFileInput = removeFileInput;
 window.handleRecover = handleRecover;
+window.runDemo = runDemo;
 
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".file-drop-label").forEach(setupDropZone);

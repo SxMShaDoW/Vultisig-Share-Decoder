@@ -7,7 +7,6 @@
     <meta name="description" content="Recover private keys from Vultisig TSS vault shares. Supports GG20 and DKLS schemes.">
     <link rel="icon" href="favicon.ico">
     <link rel="stylesheet" href="style.css">
-    <script src="wasm_exec.js"></script>
 </head>
 <body>
 
@@ -49,6 +48,14 @@
 
         <section id="results" class="results-container"></section>
 
+        <section class="demo-section">
+            <p class="demo-label">Try a demo with test vault files:</p>
+            <div class="demo-buttons">
+                <button class="btn btn-secondary btn-demo" onclick="runDemo('dkls')">DKLS 2-of-2</button>
+                <button class="btn btn-secondary btn-demo" onclick="runDemo('gg20')">GG20 2-of-2</button>
+            </div>
+        </section>
+
         <section class="info-section">
             <details>
                 <summary>How does this work?</summary>
@@ -63,6 +70,15 @@
                     <li>Cosmos private keys can be imported into Keplr</li>
                     <li>This should be a one-time recovery. Vultisig's threshold security no longer protects you after importing into a single-key wallet.</li>
                 </ul>
+            </details>
+            <details>
+                <summary>CLI tool</summary>
+                <p>Prefer the command line? Install the CLI with Go:</p>
+                <pre><code>go install github.com/vultisig/vsd/cmd/cli@latest</code></pre>
+                <p>Then run:</p>
+                <pre><code>cli recover --files share1.vult --files share2.vult
+cli recover --files honeypot.bak --format json</code></pre>
+                <p>Supports auto-detection of GG20/DKLS schemes, JSON output, and encrypted vaults.</p>
             </details>
             <details>
                 <summary>Test files</summary>

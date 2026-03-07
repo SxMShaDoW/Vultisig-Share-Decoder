@@ -24,5 +24,9 @@ go.work
 # Uncompressed WASM (only commit the .gz version)
 static/main.wasm
 
+# Node modules (dev dependencies for derive.js bundling)
+node_modules/
+bun.lock
+
 # Obsidian config (local-only)
 vault/.obsidian/

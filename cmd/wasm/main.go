@@ -51,40 +51,6 @@ func recoverGG20(this js.Value, args []js.Value) interface{} {
 	return jsonOut
 }
 
-func deriveAddresses(this js.Value, args []js.Value) interface{} {
-	if len(args) < 2 {
-		return errorJSON("DeriveAddresses requires 2 arguments: privateKeyHex, chainCodeHex")
-	}
-
-	result, err := recovery.DeriveFromRootKey(args[0].String(), args[1].String())
-	if err != nil {
-		return errorJSON(err.Error())
-	}
-
-	jsonOut, err := format.JSON(result)
-	if err != nil {
-		return errorJSON(err.Error())
-	}
-	return jsonOut
-}
-
-func deriveEdDSAAddresses(this js.Value, args []js.Value) interface{} {
-	if len(args) < 2 {
-		return errorJSON("DeriveEdDSAAddresses requires 2 arguments: privateKeyHex, publicKeyHex")
-	}
-
-	result, err := recovery.DeriveEdDSAFromKeys(args[0].String(), args[1].String())
-	if err != nil {
-		return errorJSON(err.Error())
-	}
-
-	jsonOut, err := format.JSON(result)
-	if err != nil {
-		return errorJSON(err.Error())
-	}
-	return jsonOut
-}
-
 func errorJSON(msg string) string {
 	result := &recovery.RecoveryResult{
 		Success: false,
@@ -96,8 +62,5 @@ func errorJSON(msg string) string {
 
 func main() {
 	js.Global().Set("RecoverGG20", js.FuncOf(recoverGG20))
-	js.Global().Set("DeriveAddresses", js.FuncOf(deriveAddresses))
-	js.Global().Set("DeriveEdDSAAddresses", js.FuncOf(deriveEdDSAAddresses))
-
 	select {}
 }
