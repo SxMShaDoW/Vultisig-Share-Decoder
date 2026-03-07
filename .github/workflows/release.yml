@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -30,6 +31,19 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Fix go-wrappers library path (linux/arm64)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: |
+          WRAPPERS_DIR=$(go env GOMODCACHE)/github.com/vultisig/go-wrappers@*/includes
+          for dir in $WRAPPERS_DIR; do
+            chmod u+w "$dir/linux"
+            cp "$dir/linux-arm64/libgodkls.so" "$dir/linux/libgodkls.so"
+            cp "$dir/linux-arm64/libgoschnorr.so" "$dir/linux/libgoschnorr.so"
+          done
 
       - name: Build binary
         env:
