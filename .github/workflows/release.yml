@@ -36,10 +36,30 @@ jobs:
           mkdir -p dist
           go build -ldflags="-s -w" -o dist/vsd ./cmd/cli
 
+      - name: Bundle shared libraries (macOS)
+        if: matrix.goos == 'darwin'
+        run: |
+          WRAPPERS_DIR=$(go env GOMODCACHE)/github.com/vultisig/go-wrappers@*/includes/darwin
+          for dir in $WRAPPERS_DIR; do
+            cp "$dir"/libgodkls.dylib dist/
+            cp "$dir"/libgoschnorr.dylib dist/
+          done
+          install_name_tool -add_rpath @executable_path dist/vsd
+
+      - name: Bundle shared libraries (Linux)
+        if: matrix.goos == 'linux'
+        run: |
+          WRAPPERS_DIR=$(go env GOMODCACHE)/github.com/vultisig/go-wrappers@*/includes/linux
+          for dir in $WRAPPERS_DIR; do
+            cp "$dir"/libgodkls.so dist/
+            cp "$dir"/libgoschnorr.so dist/
+          done
+          patchelf --set-rpath '$ORIGIN' dist/vsd
+
       - name: Create archive
         run: |
           cd dist
-          tar czf vsd_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz vsd
+          tar czf vsd_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz *
           shasum -a 256 vsd_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz > vsd_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz.sha256
 
       - name: Upload artifact
