@@ -40,9 +40,9 @@ jobs:
         run: |
           WRAPPERS_DIR=$(go env GOMODCACHE)/github.com/vultisig/go-wrappers@*/includes
           for dir in $WRAPPERS_DIR; do
-            chmod u+w "$dir/linux"
-            cp "$dir/linux-arm64/libgodkls.so" "$dir/linux/libgodkls.so"
-            cp "$dir/linux-arm64/libgoschnorr.so" "$dir/linux/libgoschnorr.so"
+            chmod -R u+w "$dir/linux"
+            cp -f "$dir/linux-arm64/libgodkls.so" "$dir/linux/libgodkls.so"
+            cp -f "$dir/linux-arm64/libgoschnorr.so" "$dir/linux/libgoschnorr.so"
           done
 
       - name: Build binary
