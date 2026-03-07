@@ -73,12 +73,16 @@
             </details>
             <details>
                 <summary>CLI tool</summary>
-                <p>Prefer the command line? Install the CLI with Go:</p>
-                <pre><code>go install github.com/SxMShaDoW/Vultisig-Share-Decoder/cmd/cli@latest</code></pre>
+                <p>Prefer the command line? Download pre-built binaries from <a href="https://github.com/SxMShaDoW/Vultisig-Share-Decoder/releases/latest">GitHub Releases</a>:</p>
+                <pre><code># macOS (Apple Silicon)
+curl -sSL https://github.com/SxMShaDoW/Vultisig-Share-Decoder/releases/latest/download/vsd_darwin_arm64.tar.gz | tar xz
+
+# Linux (x86_64)
+curl -sSL https://github.com/SxMShaDoW/Vultisig-Share-Decoder/releases/latest/download/vsd_linux_amd64.tar.gz | tar xz</code></pre>
                 <p>Then run:</p>
-                <pre><code>cli recover --files share1.vult --files share2.vult
-cli recover --files honeypot.bak --format json</code></pre>
-                <p>Supports auto-detection of GG20/DKLS schemes, JSON output, and encrypted vaults.</p>
+                <pre><code>./vsd recover --files share1.vult --files share2.vult
+./vsd recover --files honeypot.bak --format json</code></pre>
+                <p>Supports auto-detection of GG20/DKLS schemes, JSON output, and encrypted vaults. Keep the shared libraries in the same directory as the binary.</p>
             </details>
             <details>
                 <summary>Test files</summary>

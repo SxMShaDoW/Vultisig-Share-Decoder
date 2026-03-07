@@ -27,27 +27,45 @@ You can (and should) run this locally.
 | GG20   | Yes | Yes |
 | DKLS   | Yes (requires CGo) | Yes |
 
-## Quick Start
+## Install
 
-### Prerequisites
+### Pre-built binaries (recommended)
 
-- [Go 1.25+](https://go.dev/doc/install)
-- [Bun](https://bun.sh/) (for JS derivation bundling)
+Download from the [latest release](https://github.com/SxMShaDoW/Vultisig-Share-Decoder/releases/latest):
 
-### CLI
+**macOS (Apple Silicon):**
+```bash
+curl -sSL https://github.com/SxMShaDoW/Vultisig-Share-Decoder/releases/latest/download/vsd_darwin_arm64.tar.gz | tar xz
+```
+
+**Linux (x86_64):**
+```bash
+curl -sSL https://github.com/SxMShaDoW/Vultisig-Share-Decoder/releases/latest/download/vsd_linux_amd64.tar.gz | tar xz
+```
+
+> **Note:** Keep the shared libraries (`.dylib`/`.so`) in the same directory as the `vsd` binary.
+
+### Build from source
+
+Requires [Go 1.25+](https://go.dev/doc/install) and CGo. `go install` is not supported due to `replace` directives required by `bnb-chain/tss-lib`.
 
 ```bash
-# Build
-make cli
+git clone https://github.com/SxMShaDoW/Vultisig-Share-Decoder.git
+cd Vultisig-Share-Decoder
+make cli    # -> dist/cli
+```
 
-# Recover from vault shares (auto-detects scheme)
-./dist/cli recover --files "share1.vult" --files "share2.vult"
+## Usage
+
+```bash
+# Auto-detect scheme
+./vsd recover --files "share1.vult" --files "share2.vult"
 
 # Force a specific scheme
-./dist/cli recover --files "vault.bak" --scheme gg20
+./vsd recover --files "vault.bak" --scheme gg20
 
 # JSON output
-./dist/cli recover --files "share1.vult" --files "share2.vult" --format json
+./vsd recover --files "share1.vult" --files "share2.vult" --format json
 ```
 
 ### Web (Cloudflare Pages)
