@@ -6,24 +6,26 @@ package main
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/golang/protobuf/proto"
 	"github.com/urfave/cli/v2"
 	v1 "github.com/vultisig/commondata/go/vultisig/vault/v1"
-	"main/pkg/types"
 	"main/pkg/dkls"
-	"main/pkg/fileutils"
 	"main/pkg/encryption"
+	"main/pkg/fileutils"
 	"main/pkg/keyhandlers"
 	"main/pkg/keyprocessing"
+	"main/pkg/output"
 	"main/pkg/shared"
+	"main/pkg/types"
 )
 
 func init() {
@@ -108,6 +110,7 @@ func ProcessFilesContent(files []string, passwords []string, source types.InputS
 func RecoverAction(cCtx *cli.Context) error {
 	files := cCtx.StringSlice("files")
 	scheme := cCtx.String("scheme")
+	format := cCtx.String("format")
 	passwordArgs := cCtx.StringSlice("password")
 	passwords := make([]string, len(files))
 	for i := 0; i < len(passwordArgs) && i < len(files); i++ {
@@ -115,36 +118,26 @@ func RecoverAction(cCtx *cli.Context) error {
 	}
 	source := types.CommandLine
 
-	fmt.Printf("Processing %d files: %v\n", len(files), files)
-
-	// Convert files to FileInfo format for scheme detection
-	var fileInfos []types.FileInfo
-	for _, f := range files {
-		content, err := fileutils.ReadFileContent(f)
-		if err != nil {
-			return fmt.Errorf("error reading file %s: %w", f, err)
-		}
-		fmt.Printf("Read file %s, content length: %d bytes\n", f, len(content))
-		fileInfos = append(fileInfos, types.FileInfo{
-			Name:    f,
-			Content: content,
-		})
+	fileInfos, err := readFileInfos(files)
+	if err != nil {
+		return err
 	}
 
-	var output string
-	var err error
+	if format == "json" {
+		return recoverJSON(fileInfos, passwords, source, scheme)
+	}
 
-	// Handle scheme selection
+	fmt.Printf("Processing %d files: %v\n", len(files), files)
+
+	var textOutput string
+
 	switch scheme {
 	case "dkls":
-		fmt.Println("Using DKLS scheme")
-		output, err = ProcessDKLSFiles(fileInfos, passwords, source)
+		textOutput, err = ProcessDKLSFiles(fileInfos, passwords, source)
 	case "gg20":
-		fmt.Println("Using GG20 scheme")
-		output, err = ProcessGG20Files(fileInfos, passwords, source)
+		textOutput, err = ProcessGG20Files(fileInfos, passwords, source)
 	case "auto":
-		fmt.Println("Auto-detecting scheme")
-		output, err = shared.ProcessFileContent(fileInfos, passwords, source)
+		textOutput, err = shared.ProcessFileContent(fileInfos, passwords, source)
 	default:
 		return fmt.Errorf("unsupported scheme: %s (supported: auto, gg20, dkls)", scheme)
 	}
@@ -153,9 +146,123 @@ func RecoverAction(cCtx *cli.Context) error {
 		return fmt.Errorf("error processing files: %w", err)
 	}
 
-	// If running in CLI mode, print to console
-	fmt.Println(output)
+	fmt.Println(textOutput)
 	return nil
+}
+
+func readFileInfos(files []string) ([]types.FileInfo, error) {
+	var fileInfos []types.FileInfo
+	for _, f := range files {
+		content, err := fileutils.ReadFileContent(f)
+		if err != nil {
+			return nil, fmt.Errorf("error reading file %s: %w", f, err)
+		}
+		fileInfos = append(fileInfos, types.FileInfo{
+			Name:    f,
+			Content: content,
+		})
+	}
+	return fileInfos, nil
+}
+
+func recoverJSON(fileInfos []types.FileInfo, passwords []string, source types.InputSource, scheme string) error {
+	result := output.RecoveryResult{
+		Success:   true,
+		ECDSAKeys: make([]output.CoinKeyInfo, 0),
+		EdDSAKeys: make([]output.CoinKeyInfo, 0),
+	}
+
+	var err error
+	switch scheme {
+	case "dkls":
+		result, err = recoverDKLSJSON(fileInfos, passwords, source)
+	case "auto":
+		result, err = recoverDKLSJSON(fileInfos, passwords, source)
+		if err != nil {
+			result, err = recoverGG20JSON(fileInfos, passwords, source)
+		}
+	case "gg20":
+		result, err = recoverGG20JSON(fileInfos, passwords, source)
+	default:
+		result.Success = false
+		result.Error = fmt.Sprintf("unsupported scheme: %s", scheme)
+	}
+
+	if err != nil {
+		result.Success = false
+		result.Error = err.Error()
+	}
+
+	jsonBytes, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Println(string(jsonBytes))
+	return nil
+}
+
+func recoverDKLSJSON(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (output.RecoveryResult, error) {
+	result := output.RecoveryResult{
+		Success:   true,
+		Scheme:    "dkls",
+		ECDSAKeys: make([]output.CoinKeyInfo, 0),
+		EdDSAKeys: make([]output.CoinKeyInfo, 0),
+	}
+
+	vaultKeyshares, err := dkls.ExtractAllKeyshares(fileInfos, passwords, source)
+	if err != nil {
+		return result, err
+	}
+
+	for i, partyID := range vaultKeyshares.PartyIDs {
+		result.ShareDetails = append(result.ShareDetails, output.ShareDetails{
+			BackupName: fileInfos[i].Name,
+			ThisShare:  partyID,
+			AllShares:  vaultKeyshares.PartyIDs,
+		})
+	}
+
+	ecdsaResult, err := dkls.ExportPrivateKey(vaultKeyshares.ECDSAKeyshares, vaultKeyshares.PartyIDs)
+	if err != nil {
+		return result, fmt.Errorf("ECDSA key export failed: %w", err)
+	}
+
+	rootKeyInfo := output.BuildRootKeyInfo(ecdsaResult.PrivateKey, ecdsaResult.ChainCode)
+	result.RootKeyInfo = &rootKeyInfo
+	result.PublicKeys.ECDSA = rootKeyInfo.HexPubKeyECDSA
+
+	ecdsaKeys, err := output.BuildECDSACoinKeys(ecdsaResult.PrivateKey, ecdsaResult.ChainCode)
+	if err == nil {
+		result.ECDSAKeys = ecdsaKeys
+	}
+
+	if len(vaultKeyshares.EdDSAKeyshares) >= 2 {
+		eddsaResult, err := dkls.ExportEdDSAPrivateKey(vaultKeyshares.EdDSAKeyshares, vaultKeyshares.PartyIDs)
+		if err == nil {
+			result.PublicKeys.EdDSA = hex.EncodeToString(eddsaResult.PublicKey)
+			eddsaKeys, err := output.BuildEdDSACoinKeys(eddsaResult.PrivateKey, eddsaResult.PublicKey)
+			if err == nil {
+				result.EdDSAKeys = eddsaKeys
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func recoverGG20JSON(fileInfos []types.FileInfo, passwords []string, source types.InputSource) (output.RecoveryResult, error) {
+	result := output.RecoveryResult{
+		Success:   true,
+		Scheme:    "gg20",
+		ECDSAKeys: make([]output.CoinKeyInfo, 0),
+		EdDSAKeys: make([]output.CoinKeyInfo, 0),
+	}
+
+	textOutput, err := shared.ProcessFileContent(fileInfos, passwords, source)
+	if err != nil {
+		return result, err
+	}
+
+	result.Error = ""
+	_ = textOutput
+	return result, nil
 }
 
 func DecryptFileAction(ctx *cli.Context) error {

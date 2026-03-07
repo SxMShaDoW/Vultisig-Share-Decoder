@@ -10,7 +10,6 @@ import (
 )
 
 func main() {
-    fmt.Println("Running in command-line mode")
     app := cli.App{
         Name:  "key-recover",
         Usage: "Recover a key from a set of TSS key shares",
@@ -37,6 +36,11 @@ func main() {
                         Name:  "scheme",
                         Usage: "force scheme type (gg20, dkls, auto)",
                         Value: "auto",
+                    },
+                    &cli.StringFlag{
+                        Name:  "format",
+                        Usage: "output format (text, json)",
+                        Value: "text",
                     },
                 },
                 Action: RecoverAction,
